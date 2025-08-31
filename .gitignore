@@ -1,0 +1,48 @@
+# Clojure build artifacts and caches
+.cpcache/
+target/
+classes/
+.lein-*
+.nrepl-port
+.prepl-port
+.rebel_readline_history
+
+# Editor-specific files
+.idea/
+.vscode/
+*.iml
+.calva/
+.clj-kondo/.cache/
+.lsp/
+.eastwood
+
+# Operating system specific files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Dependency directories
+/lib/
+/libs/
+/classes/
+/checkouts/
+
+# Compiled files
+*.class
+*.jar
+pom.xml
+pom.xml.asc
+
+# Log files
+*.log
+.clj-kondo/.cache
+.portal/
+
+# Local configuration
+profiles.clj
+.env
+.dir-locals.el
+
+# Coverage reports
+/coverage/
