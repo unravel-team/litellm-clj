@@ -5,6 +5,8 @@
             [litellm.threadpool :as threadpool]
             [litellm.providers.core :as providers]
             [litellm.providers.openai] ; Load to register provider
+            [litellm.providers.anthropic] ; Load to register provider
+            [litellm.providers.openrouter] ; Load to register provider
             [com.climate.claypoole :as cp]))
 
 ;; ============================================================================
