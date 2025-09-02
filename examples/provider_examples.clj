@@ -10,7 +10,7 @@
   [api-key]
   (println "Testing OpenAI provider...")
   (let [response (litellm/completion
-                   {:model "openai/gpt-3.5-turbo"
+                   {:model "gpt-3.5-turbo"
                     :api-key api-key
                     :messages [{:role :user
                                 :content "What is the capital of France?"}]
@@ -35,6 +35,40 @@
                                 :content "What is the capital of Germany?"}]
                     :max-tokens 100})]
     (println "Anthropic Response:")
+    (println (-> response :choices first :message :content))
+    (println "Usage:" (:usage response))
+    response))
+
+;; ============================================================================
+;; Ollama Example
+;; ============================================================================
+
+(defn ollama-example
+  "Example of using Ollama provider (requires local Ollama server running)"
+  []
+  (println "Testing Ollama provider...")
+  (let [response (litellm/completion
+                   {:model "ollama/llama2"
+                    :api-base "http://localhost:11434"
+                    :messages [{:role :user
+                                :content "What is the capital of Spain?"}]
+                    :max-tokens 100})]
+    (println "Ollama Response:")
+    (println (-> response :choices first :message :content))
+    (println "Usage:" (:usage response))
+    response))
+
+(defn ollama-chat-example
+  "Example of using Ollama chat API (requires local Ollama server running)"
+  []
+  (println "Testing Ollama chat API...")
+  (let [response (litellm/completion
+                   {:model "ollama_chat/llama2"
+                    :api-base "http://localhost:11434"
+                    :messages [{:role :user
+                                :content "What is the capital of Spain?"}]
+                    :max-tokens 100})]
+    (println "Ollama Chat Response:")
     (println (-> response :choices first :message :content))
     (println "Usage:" (:usage response))
     response))
@@ -127,7 +161,7 @@
 
 (defn run-all-examples
   "Run all examples with provided API keys"
-  [& {:keys [openai-key anthropic-key openrouter-key]}]
+  [& {:keys [openai-key anthropic-key openrouter-key ollama-server]}]
   (when openai-key
     (openai-example openai-key)
     (println))
@@ -139,6 +173,13 @@
   (when openrouter-key
     (openrouter-example openrouter-key)
     (println))
+  
+  (when ollama-server
+    (binding [litellm/*default-options* {:api-base ollama-server}]
+      (ollama-example)
+      (println)
+      (ollama-chat-example)
+      (println)))
   
   (when (and openai-key anthropic-key)
     (system-prompt-example openai-key anthropic-key)
@@ -156,11 +197,14 @@
 ;; (run-all-examples
 ;;   :openai-key "your-openai-key"
 ;;   :anthropic-key "your-anthropic-key"
-;;   :openrouter-key "your-openrouter-key")
+;;   :openrouter-key "your-openrouter-key"
+;;   :ollama-server "http://localhost:11434")
 ;;
 ;; Or run individual examples:
 ;;
 (comment
   (openai-example "your-openai-key")
   (anthropic-example "your-anthropic-key")
-  (openrouter-example "your-openrouter-key"))
+  (openrouter-example "your-openrouter-key")
+  (ollama-example)
+  (ollama-chat-example))
