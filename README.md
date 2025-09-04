@@ -50,7 +50,7 @@ A Clojure port of the popular [LiteLLM](https://github.com/BerriAI/litellm) libr
 Add to your `deps.edn`:
 
 ```clojure
-{:deps {litellm/litellm {:local/root "/path/to/clj-litellm"}}}
+{:deps {litellm/litellm {:local/root "/path/to/litellm-clj"}}}
 ```
 
 ## License

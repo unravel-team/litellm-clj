@@ -157,8 +157,8 @@
         (let [start-time (System/currentTimeMillis)
               response (http/post url
                                   {:headers {"Authorization" (str "Bearer " (:api-key provider))
-                                             "HTTP-Referer" "https://github.com/unravel-team/clj-litellm"
-                                             "X-Title" "clj-litellm"
+                                             "HTTP-Referer" "https://github.com/unravel-team/litellm-clj"
+                                             "X-Title" "litellm-clj"
                                              "Content-Type" "application/json"
                                              "User-Agent" "litellm-clj/1.0.0"}
                                    :body (json/encode transformed-request)
