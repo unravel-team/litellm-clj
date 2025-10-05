@@ -49,7 +49,8 @@
   :repl {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}
                       cider/cider-nrepl {:mvn/version "0.42.1"}}}
   
-  :build {:deps {io.github.clojure/tools.build {:mvn/version "0.9.6"}}
+  :build {:deps {io.github.clojure/tools.build {:mvn/version "0.9.6"}
+                 slipset/deps-deploy {:mvn/version "0.2.0"}}
           :ns-default build}
   
   :uberjar {:replace-deps {org.clojure/clojure {:mvn/version "1.11.1"}}
