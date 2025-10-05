@@ -1,10 +1,20 @@
-# Release Notes - LiteLLM Clojure v0.1.0
+# Release Notes - LiteLLM Clojure v0.2.0
 
 **Release Date:** May 10, 2025
 
-## 🎉 Initial Release
+## 🎉 New Release - Google Gemini Support!
 
-We're excited to announce the first release of LiteLLM Clojure - a Clojure port of the popular LiteLLM library that provides a unified interface for multiple LLM providers.
+We're excited to announce v0.2.0 of LiteLLM Clojure, featuring full integration with Google Gemini models!
+
+## 🆕 What's New in v0.2.0
+
+### Google Gemini Integration
+- **Full Gemini Support** - Native integration with Google's Gemini models
+  - Gemini Pro, Gemini Pro Vision, Gemini Ultra
+  - Streaming responses
+  - Vision/multimodal capabilities
+  - Safety settings configuration
+  - Advanced generation parameters (temperature, top-k, top-p)
 
 ## 🚀 Key Features
 
@@ -16,6 +26,7 @@ We're excited to announce the first release of LiteLLM Clojure - a Clojure port 
 ### Provider Support
 - **OpenAI** - GPT-3.5-Turbo, GPT-4, GPT-4o with function calling
 - **Anthropic** - Claude 3 (Opus, Sonnet, Haiku), Claude 2.x
+- **Google Gemini** - Gemini Pro, Gemini Pro Vision, Gemini Ultra 🆕
 - **OpenRouter** - Access to 100+ models through a single API
 - **Ollama** - Run models locally
 
@@ -37,13 +48,13 @@ We're excited to announce the first release of LiteLLM Clojure - a Clojure port 
 Add to your `deps.edn`:
 
 ```clojure
-{:deps {tech.unravel/litellm-clj {:mvn/version "0.1.0"}}}
+{:deps {tech.unravel/litellm-clj {:mvn/version "0.2.0"}}}
 ```
 
 Or with Leiningen:
 
 ```clojure
-[tech.unravel/litellm-clj "0.1.0"]
+[tech.unravel/litellm-clj "0.2.0"]
 ```
 
 ## 🔧 Quick Start
@@ -84,14 +95,15 @@ This is an initial release with some known limitations:
 
 These will be addressed in upcoming releases.
 
-## 🔜 What's Next (v0.2.0 planned)
+## 🔜 What's Next (v0.3.0 planned)
 
 - Azure OpenAI support
-- Google Gemini integration
+- Cohere integration
 - Enhanced streaming API
 - Improved error handling
 - Better test coverage
 - Performance optimizations
+- Batch request support
 
 ## 💡 Getting Help
 
@@ -113,7 +125,29 @@ MIT License - see LICENSE file for details.
 ```
 GroupId: tech.unravel
 ArtifactId: litellm-clj  
-Version: 0.1.0
+Version: 0.2.0
 ```
 
 **Clojars:** https://clojars.org/tech.unravel/litellm-clj
+
+## 📝 Upgrade Notes from v0.1.0
+
+This is a minor version release with no breaking changes. Simply update the version number in your `deps.edn`:
+
+```clojure
+{:deps {tech.unravel/litellm-clj {:mvn/version "0.2.0"}}}
+```
+
+### New Gemini Usage Example
+
+```clojure
+;; Configure Gemini
+(def system (litellm/create-system 
+              {:providers {"gemini" {:provider :gemini
+                                     :api-key (System/getenv "GEMINI_API_KEY")}}}))
+
+;; Make a request
+(litellm/make-request system
+  {:model "gemini-pro"
+   :messages [{:role "user" :content "Explain quantum computing"}]})
+```

@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-05-10
+
+### Added
+- **Google Gemini Support** - Full integration with Google Gemini models
+  - Gemini Pro, Gemini Pro Vision, and Gemini Ultra support
+  - Streaming responses support
+  - Vision/multimodal capabilities
+  - Safety settings configuration
+  - Generation parameters (temperature, top-k, top-p)
+- Gemini provider implementation with comprehensive error handling
+- Gemini-specific test suite
+- Gemini usage examples
+
+### Changed
+- Updated provider support matrix to show Gemini as ✅ Supported
+- Enhanced documentation with Gemini configuration and examples
+
 ## [0.1.0] - 2025-05-10
 
 ### Added

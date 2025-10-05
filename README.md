@@ -10,7 +10,7 @@ A Clojure port of the popular [LiteLLM](https://github.com/BerriAI/litellm) libr
 | Anthropic    | ✅ Supported | Claude 3 (Opus, Sonnet, Haiku), Claude 2.x | ❌               | ✅        |
 | OpenRouter   | ✅ Supported | All OpenRouter models                      | ✅               | ✅        |
 | Azure OpenAI | 🔄 Planned   | -                                          | -                | -         |
-| Google       | 🔄 Planned   | Gemini, PaLM                               | -                | -         |
+| Google Gemini| ✅ Supported | Gemini Pro, Gemini Pro Vision, Gemini Ultra| ❌               | ✅        |
 | Cohere       | 🔄 Planned   | Command                                    | -                | -         |
 | Hugging Face | 🔄 Planned   | Various open models                        | -                | -         |
 | Mistral      | 🔄 Planned   | Mistral, Mixtral                           | -                | -         |
@@ -31,12 +31,12 @@ A Clojure port of the popular [LiteLLM](https://github.com/BerriAI/litellm) libr
 
 - **OpenAI**: GPT-3.5-Turbo, GPT-4, GPT-4o, and other OpenAI models
 - **Anthropic**: Claude 3 (Opus, Sonnet, Haiku), Claude 2.x
+- **Google Gemini**: Gemini Pro, Gemini Pro Vision, Gemini Ultra with vision/multimodal support
 - **OpenRouter**: Access to multiple providers through a single API (OpenAI, Anthropic, Google, Meta, etc.)
 
 ## Planned Providers
 
 - Azure OpenAI
-- Google (Gemini)
 - Cohere
 - Mistral AI
 - Hugging Face
@@ -50,13 +50,13 @@ A Clojure port of the popular [LiteLLM](https://github.com/BerriAI/litellm) libr
 Add to your `deps.edn`:
 
 ```clojure
-{:deps {tech.unravel/litellm-clj {:mvn/version "0.1.0"}}}
+{:deps {tech.unravel/litellm-clj {:mvn/version "0.2.0"}}}
 ```
 
 Or with Leiningen, add to your `project.clj`:
 
 ```clojure
-[tech.unravel/litellm-clj "0.1.0"]
+[tech.unravel/litellm-clj "0.2.0"]
 ```
 
 ## Quick Start
@@ -181,6 +181,37 @@ export OPENROUTER_API_KEY=your-api-key-here
 (litellm/completion system
   {:model "meta-llama/llama-2-70b-chat"
    :messages [{:role "user" :content "Hello!"}]})
+```
+
+### Google Gemini
+
+Set your API key:
+
+```bash
+export GEMINI_API_KEY=your-api-key-here
+```
+
+```clojure
+;; Use Gemini Pro
+(litellm/completion system
+  {:model "gemini-pro"
+   :messages [{:role "user" :content "Explain quantum computing"}]})
+
+;; Use Gemini Pro Vision with images
+(litellm/completion system
+  {:model "gemini-pro-vision"
+   :messages [{:role "user" 
+               :content [{:type "text" :text "What's in this image?"}
+                        {:type "image_url" :image_url {:url "https://..."}}]}]})
+
+;; Configure safety settings and generation params
+(litellm/completion system
+  {:model "gemini-pro"
+   :messages [{:role "user" :content "Write a story"}]
+   :temperature 0.9
+   :top_p 0.95
+   :top_k 40
+   :max_tokens 1024})
 ```
 
 ### Ollama (Local Models)
