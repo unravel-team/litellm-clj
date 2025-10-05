@@ -29,11 +29,7 @@
                              [:url "https://opensource.org/licenses/MIT"]]]
                            [:developers
                             [:developer
-                             [:name "Unravel Team"]]]
-                           [:scm
-                            [:url "https://github.com/unravel-team/clj-litellm"]
-                            [:connection "scm:git:git://github.com/unravel-team/clj-litellm.git"]
-                            [:developerConnection "scm:git:ssh://git@github.com/unravel-team/clj-litellm.git"]]]})
+                             [:name "Unravel Team"]]]]})
   (b/copy-dir {:src-dirs ["src" "resources"]
                :target-dir class-dir})
   (b/jar {:class-dir class-dir
