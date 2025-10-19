@@ -192,100 +192,75 @@
    "gemini-2.0-pro" "gemini-2.0-pro-latest"})
 
 ;; ============================================================================
-;; Gemini Provider Record
+;; Gemini Provider Multimethod Implementations
 ;; ============================================================================
 
-(defrecord GeminiProvider [api-key api-base model-mapping rate-limits cost-map timeout]
-  core/LLMProvider
-  
-  (provider-name [_] "gemini")
-  
-  (transform-request [provider request]
-    (let [model (:model request)
-          system-instruction (extract-system-instruction (:messages request))
-          filtered-messages (filter #(not= :system (:role %)) (:messages request))
-          transformed {:contents (transform-messages filtered-messages)
-                      :generation_config (transform-generation-config request)}]
-      
-      ;; Add system instruction if present
-      (cond-> transformed
-        system-instruction (assoc :system_instruction system-instruction)
-        (:tools request) (assoc :tools [(transform-tools (:tools request))])
-        (:tool-choice request) (assoc :tool_config {:function_calling_config {:mode (transform-tool-choice (:tool-choice request))}}))))
-  
-  (make-request [provider transformed-request thread-pools telemetry]
-    (let [url (str (:api-base provider) "/models/" (:model transformed-request) ":generateContent")]
-      (cp/future (:api-calls thread-pools)
-        (let [start-time (System/currentTimeMillis)
-              response (http/post url
-                                  {:headers {"x-goog-api-key" (:api-key provider)
-                                             "Content-Type" "application/json"
-                                             "User-Agent" "litellm-clj/1.0.0"}
-                                   :body (json/encode transformed-request)
-                                   :timeout (:timeout provider 30000)
-                                   :as :json})
-              duration (- (System/currentTimeMillis) start-time)]
-          
-          ;; Handle errors
-          (when (>= (:status response) 400)
-            (handle-error-response provider response))
-          
-          response))))
-  
-  (transform-response [provider response]
-    (transform-response response))
-  
-  (supports-streaming? [_] true)
-  
-  (supports-function-calling? [_] true)
-  
-  (get-rate-limits [provider]
-    (:rate-limits provider {:requests-per-minute 60
-                           :tokens-per-minute 60000}))
-  
-  (health-check [provider thread-pools]
-    (cp/future (:health-checks thread-pools)
-      (try
-        (let [response (http/post (str (:api-base provider) "/models/gemini-1.5-flash-latest:generateContent")
-                                  {:headers {"x-goog-api-key" (:api-key provider)
-                                             "Content-Type" "application/json"
-                                             "User-Agent" "litellm-clj/1.0.0"}
-                                   :body (json/encode {:contents [{:role "user" :parts [{:text "hi"}]}]
-                                                      :generation_config {:maxOutputTokens 1}})
-                                   :timeout 5000
-                                   :as :json})]
-          (= 200 (:status response)))
-        (catch Exception e
-          (log/warn "Gemini health check failed" {:error (.getMessage e)})
-          false))))
-  
-  (get-cost-per-token [provider model]
-    (get (:cost-map provider) model {:input 0.0 :output 0.0})))
+(defmethod core/transform-request :gemini
+  [_ request config]
+  (let [model (:model request)
+        system-instruction (extract-system-instruction (:messages request))
+        filtered-messages (filter #(not= :system (:role %)) (:messages request))
+        transformed {:contents (transform-messages filtered-messages)
+                    :generation_config (transform-generation-config request)}]
+    
+    ;; Add system instruction if present
+    (cond-> transformed
+      system-instruction (assoc :system_instruction system-instruction)
+      (:tools request) (assoc :tools [(transform-tools (:tools request))])
+      (:tool-choice request) (assoc :tool_config {:function_calling_config {:mode (transform-tool-choice (:tool-choice request))}}))))
 
-;; ============================================================================
-;; Provider Factory
-;; ============================================================================
+(defmethod core/make-request :gemini
+  [_ transformed-request thread-pools telemetry config]
+  (let [url (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/" (:model transformed-request) ":generateContent")]
+    (cp/future (:api-calls thread-pools)
+      (let [start-time (System/currentTimeMillis)
+            response (http/post url
+                                {:headers {"x-goog-api-key" (:api-key config)
+                                           "Content-Type" "application/json"
+                                           "User-Agent" "litellm-clj/1.0.0"}
+                                 :body (json/encode transformed-request)
+                                 :timeout (:timeout config 30000)
+                                 :as :json})
+            duration (- (System/currentTimeMillis) start-time)]
+        
+        ;; Handle errors
+        (when (>= (:status response) 400)
+          (handle-error-response :gemini response))
+        
+        response))))
 
-(defn create-gemini-provider
-  "Create Gemini provider instance"
-  [config]
-  (map->GeminiProvider
-    {:api-key (:api-key config)
-     :api-base (:api-base config "https://generativelanguage.googleapis.com/v1beta")
-     :model-mapping (merge default-model-mapping (:model-mapping config {}))
-     :rate-limits (:rate-limits config {:requests-per-minute 60
-                                       :tokens-per-minute 60000})
-     :cost-map (merge default-cost-map (:cost-map config {}))
-     :timeout (:timeout config 30000)}))
+(defmethod core/transform-response :gemini
+  [_ response]
+  (transform-response response))
 
-;; ============================================================================
-;; Provider Registration
-;; ============================================================================
+(defmethod core/supports-streaming? :gemini [_] true)
 
-(defn register-gemini-provider!
-  "Register Gemini provider in the global registry"
-  []
-  (core/register-provider! "gemini" create-gemini-provider))
+(defmethod core/supports-function-calling? :gemini [_] true)
+
+(defmethod core/get-rate-limits :gemini [_]
+  {:requests-per-minute 60
+   :tokens-per-minute 60000})
+
+(defmethod core/health-check :gemini
+  [_ thread-pools config]
+  (cp/future (:health-checks thread-pools)
+    (try
+      (let [response (http/post (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/gemini-1.5-flash-latest:generateContent")
+                                {:headers {"x-goog-api-key" (:api-key config)
+                                           "Content-Type" "application/json"
+                                           "User-Agent" "litellm-clj/1.0.0"}
+                                 :body (json/encode {:contents [{:role "user" :parts [{:text "hi"}]}]
+                                                    :generation_config {:maxOutputTokens 1}})
+                                 :timeout 5000
+                                 :as :json})]
+        (= 200 (:status response)))
+      (catch Exception e
+        (log/warn "Gemini health check failed" {:error (.getMessage e)})
+        false))))
+
+(defmethod core/get-cost-per-token :gemini
+  [_ model]
+  (get default-cost-map model {:input 0.0 :output 0.0}))
 
 ;; ============================================================================
 ;; Streaming Support
@@ -329,7 +304,7 @@
                     transformed (transform-streaming-chunk parsed)]
                 (callback transformed))
               (catch Exception e
-                (log/debug "Failed to parse streaming chunk" {:line line :error (.getMessage e)}))))))))
+                (log/debug "Failed to parse streaming chunk" {:line line :error (.getMessage e)})))))))))
 
 ;; ============================================================================
 ;; Utility Functions
@@ -391,6 +366,3 @@
          :provider "gemini"
          :error (.getMessage e)
          :error-type (type e)}))))
-
-;; Auto-register the provider when namespace is loaded
-(register-gemini-provider!)

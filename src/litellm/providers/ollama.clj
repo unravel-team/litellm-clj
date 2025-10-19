@@ -116,114 +116,91 @@
    "llava" {:input 0.0 :output 0.0}})
 
 ;; ============================================================================
-;; Ollama Provider Record
+;; Ollama Provider Multimethod Implementations
 ;; ============================================================================
 
-(defrecord OllamaProvider [api-base cost-map timeout]
-  core/LLMProvider
-  
-  (provider-name [_] "ollama")
-  
-  (transform-request [provider request]
-    (let [original-model (:model request)
-          is-chat (str/starts-with? original-model "ollama_chat/")
-          model (core/extract-model-name original-model)
-          actual-model (if is-chat 
-                         (if (str/starts-with? original-model "ollama_chat/")
-                           (subs original-model (count "ollama_chat/"))
-                           model)
+(defmethod core/transform-request :ollama
+  [_ request config]
+  (let [original-model (:model request)
+        is-chat (str/starts-with? original-model "ollama_chat/")
+        model (core/extract-model-name original-model)
+        actual-model (if is-chat 
+                       (if (str/starts-with? original-model "ollama_chat/")
+                         (subs original-model (count "ollama_chat/"))
                          model)
-          messages (:messages request)]
+                       model)
+        messages (:messages request)]
+    
+    (if is-chat
+      ;; Chat API format
+      (cond-> {:model actual-model
+               :messages (transform-messages-for-chat messages)
+               :stream (:stream request false)}
+        (:format request) (assoc :format (:format request)))
       
-      (if is-chat
-        ;; Chat API format
-        (cond-> {:model actual-model
-                 :messages (transform-messages-for-chat messages)
-                 :stream (:stream request false)}
-          (:format request) (assoc :format (:format request)))
+      ;; Generate API format
+      (cond-> {:model actual-model
+               :prompt (transform-messages-for-generate messages)
+               :stream (:stream request false)
+               :options {:num_predict (or (:max-tokens request) 128)
+                        :temperature (or (:temperature request) 0.7)
+                        :top_p (or (:top-p request) 1.0)}}
+        (:format request) (assoc :format (:format request))))))
+
+(defmethod core/make-request :ollama
+  [_ transformed-request thread-pools telemetry config]
+  (let [model (:model transformed-request)
+        is-chat (contains? transformed-request :messages)
+        url (str (:api-base config "http://localhost:11434") (if is-chat "/api/chat" "/api/generate"))]
+    
+    (cp/future (:api-calls thread-pools)
+      (let [start-time (System/currentTimeMillis)
+            response (http/post url
+                                {:headers {"Content-Type" "application/json"
+                                           "User-Agent" "litellm-clj/1.0.0"}
+                                 :body (json/encode transformed-request)
+                                 :timeout (:timeout config 30000)
+                                 :as :json})
+            duration (- (System/currentTimeMillis) start-time)]
         
-        ;; Generate API format
-        (cond-> {:model actual-model
-                 :prompt (transform-messages-for-generate messages)
-                 :stream (:stream request false)
-                 :options {:num_predict (or (:max-tokens request) 128)
-                          :temperature (or (:temperature request) 0.7)
-                          :top_p (or (:top-p request) 1.0)}}
-          (:format request) (assoc :format (:format request))))))
-  
-  (make-request [provider transformed-request thread-pools telemetry]
-    (let [model (:model transformed-request)
-          is-chat (contains? transformed-request :messages)
-          url (str (:api-base provider) (if is-chat "/api/chat" "/api/generate"))]
-      
-      (cp/future (:api-calls thread-pools)
-        (let [start-time (System/currentTimeMillis)
-              response (http/post url
-                                  {:headers {"Content-Type" "application/json"
-                                             "User-Agent" "litellm-clj/1.0.0"}
-                                   :body (json/encode transformed-request)
-                                   :timeout (:timeout provider 30000)
-                                   :as :json})
-              duration (- (System/currentTimeMillis) start-time)]
-          
-          ;; Handle errors
-          (when (>= (:status response) 400)
-            (handle-error-response provider response))
-          
-          ;; Add request type to response for later processing
-          (assoc response :ollama-request-type (if is-chat :chat :generate))))))
-  
-  (transform-response [provider response]
-    (let [request-type (:ollama-request-type response)]
-      (case request-type
-        :chat (transform-chat-response response)
-        :generate (transform-generate-response response)
-        ;; Default case
-        (transform-generate-response response))))
-  
-  (supports-streaming? [_] true)
-  
-  (supports-function-calling? [_] false) ;; Ollama doesn't support function calling yet
-  
-  (get-rate-limits [provider]
-    ;; Ollama is typically run locally, so rate limits are not applicable
-    ;; but we provide some reasonable defaults
-    {:requests-per-minute 60
-     :tokens-per-minute 100000})
-  
-  (health-check [provider thread-pools]
-    (cp/future (:health-checks thread-pools)
-      (try
-        (let [response (http/get (str (:api-base provider) "/api/tags")
-                                {:timeout 5000})]
-          (= 200 (:status response)))
-        (catch Exception e
-          (log/warn "Ollama health check failed" {:error (.getMessage e)})
-          false))))
-  
-  (get-cost-per-token [provider model]
-    (get (:cost-map provider) model {:input 0.0 :output 0.0})))
+        ;; Handle errors
+        (when (>= (:status response) 400)
+          (handle-error-response :ollama response))
+        
+        ;; Add request type to response for later processing
+        (assoc response :ollama-request-type (if is-chat :chat :generate))))))
 
-;; ============================================================================
-;; Provider Factory
-;; ============================================================================
+(defmethod core/transform-response :ollama
+  [_ response]
+  (let [request-type (:ollama-request-type response)]
+    (case request-type
+      :chat (transform-chat-response response)
+      :generate (transform-generate-response response)
+      ;; Default case
+      (transform-generate-response response))))
 
-(defn create-ollama-provider
-  "Create Ollama provider instance"
-  [config]
-  (map->OllamaProvider
-    {:api-base (:api-base config "http://localhost:11434")
-     :cost-map (merge default-cost-map (:cost-map config {}))
-     :timeout (:timeout config 30000)}))
+(defmethod core/supports-streaming? :ollama [_] true)
 
-;; ============================================================================
-;; Provider Registration
-;; ============================================================================
+(defmethod core/supports-function-calling? :ollama [_] false)
 
-(defn register-ollama-provider!
-  "Register Ollama provider in the global registry"
-  []
-  (core/register-provider! "ollama" create-ollama-provider))
+(defmethod core/get-rate-limits :ollama [_]
+  {:requests-per-minute 60
+   :tokens-per-minute 100000})
+
+(defmethod core/health-check :ollama
+  [_ thread-pools config]
+  (cp/future (:health-checks thread-pools)
+    (try
+      (let [response (http/get (str (:api-base config "http://localhost:11434") "/api/tags")
+                              {:timeout 5000})]
+        (= 200 (:status response)))
+      (catch Exception e
+        (log/warn "Ollama health check failed" {:error (.getMessage e)})
+        false))))
+
+(defmethod core/get-cost-per-token :ollama
+  [_ model]
+  (get default-cost-map model {:input 0.0 :output 0.0}))
 
 ;; ============================================================================
 ;; Streaming Support
@@ -310,6 +287,3 @@
          :provider "ollama"
          :error (.getMessage e)
          :error-type (type e)}))))
-
-;; Auto-register the provider when namespace is loaded
-(register-ollama-provider!)

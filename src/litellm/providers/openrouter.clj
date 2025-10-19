@@ -126,106 +126,82 @@
    "meta-llama/llama-3-8b-instruct" {:input 0.0000001 :output 0.0000001}})
 
 ;; ============================================================================
-;; OpenRouter Provider Record
+;; OpenRouter Provider Multimethod Implementations
 ;; ============================================================================
 
-(defrecord OpenRouterProvider [api-key api-base rate-limits cost-map timeout]
-  core/LLMProvider
-  
-  (provider-name [_] "openrouter")
-  
-  (transform-request [provider request]
-    (let [model (:model request)
-          transformed {:model model
-                      :messages (transform-messages (:messages request))
-                      :max_tokens (:max-tokens request)
-                      :temperature (:temperature request)
-                      :top_p (:top-p request)
-                      :frequency_penalty (:frequency-penalty request)
-                      :presence_penalty (:presence-penalty request)
-                      :stop (:stop request)
-                      :stream (:stream request false)}]
-      
-      ;; Add function calling if present
-      (cond-> transformed
-        (:tools request) (assoc :tools (transform-tools (:tools request)))
-        (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request))))))
-  
-  (make-request [provider transformed-request thread-pools telemetry]
-    (let [url (str (:api-base provider) "/chat/completions")]
-      (cp/future (:api-calls thread-pools)
-        (let [start-time (System/currentTimeMillis)
-              response (http/post url
-                                  {:headers {"Authorization" (str "Bearer " (:api-key provider))
-                                             "HTTP-Referer" "https://github.com/unravel-team/litellm-clj"
-                                             "X-Title" "litellm-clj"
-                                             "Content-Type" "application/json"
-                                             "User-Agent" "litellm-clj/1.0.0"}
-                                   :body (json/encode transformed-request)
-                                   :timeout (:timeout provider 30000)
-                                   :as :json})
-              duration (- (System/currentTimeMillis) start-time)]
-          
-          ;; Handle errors
-          (when (>= (:status response) 400)
-            (handle-error-response provider response))
-          
-          response))))
-  
-  (transform-response [provider response]
-    (let [body (:body response)]
-      {:id (:id body)
-       :object (:object body)
-       :created (:created body)
-       :model (:model body)
-       :choices (map transform-choice (:choices body))
-       :usage (transform-usage (:usage body))}))
-  
-  (supports-streaming? [_] true)
-  
-  (supports-function-calling? [_] true)
-  
-  (get-rate-limits [provider]
-    (:rate-limits provider {:requests-per-minute 3500
-                           :tokens-per-minute 90000}))
-  
-  (health-check [provider thread-pools]
-    (cp/future (:health-checks thread-pools)
-      (try
-        (let [response (http/get (str (:api-base provider) "/models")
-                                {:headers {"Authorization" (str "Bearer " (:api-key provider))}
-                                 :timeout 5000})]
-          (= 200 (:status response)))
-        (catch Exception e
-          (log/warn "OpenRouter health check failed" {:error (.getMessage e)})
-          false))))
-  
-  (get-cost-per-token [provider model]
-    (get (:cost-map provider) model {:input 0.0 :output 0.0})))
+(defmethod core/transform-request :openrouter
+  [_ request config]
+  (let [model (:model request)
+        transformed {:model model
+                    :messages (transform-messages (:messages request))
+                    :max_tokens (:max-tokens request)
+                    :temperature (:temperature request)
+                    :top_p (:top-p request)
+                    :frequency_penalty (:frequency-penalty request)
+                    :presence_penalty (:presence-penalty request)
+                    :stop (:stop request)
+                    :stream (:stream request false)}]
+    
+    ;; Add function calling if present
+    (cond-> transformed
+      (:tools request) (assoc :tools (transform-tools (:tools request)))
+      (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request))))))
 
-;; ============================================================================
-;; Provider Factory
-;; ============================================================================
+(defmethod core/make-request :openrouter
+  [_ transformed-request thread-pools telemetry config]
+  (let [url (str (:api-base config "https://openrouter.ai/api/v1") "/chat/completions")]
+    (cp/future (:api-calls thread-pools)
+      (let [start-time (System/currentTimeMillis)
+            response (http/post url
+                                {:headers {"Authorization" (str "Bearer " (:api-key config))
+                                           "HTTP-Referer" "https://github.com/unravel-team/litellm-clj"
+                                           "X-Title" "litellm-clj"
+                                           "Content-Type" "application/json"
+                                           "User-Agent" "litellm-clj/1.0.0"}
+                                 :body (json/encode transformed-request)
+                                 :timeout (:timeout config 30000)
+                                 :as :json})
+            duration (- (System/currentTimeMillis) start-time)]
+        
+        ;; Handle errors
+        (when (>= (:status response) 400)
+          (handle-error-response :openrouter response))
+        
+        response))))
 
-(defn create-openrouter-provider
-  "Create OpenRouter provider instance"
-  [config]
-  (map->OpenRouterProvider
-    {:api-key (:api-key config)
-     :api-base (:api-base config "https://openrouter.ai/api/v1")
-     :rate-limits (:rate-limits config {:requests-per-minute 3500
-                                       :tokens-per-minute 90000})
-     :cost-map (merge default-cost-map (:cost-map config {}))
-     :timeout (:timeout config 30000)}))
+(defmethod core/transform-response :openrouter
+  [_ response]
+  (let [body (:body response)]
+    {:id (:id body)
+     :object (:object body)
+     :created (:created body)
+     :model (:model body)
+     :choices (map transform-choice (:choices body))
+     :usage (transform-usage (:usage body))}))
 
-;; ============================================================================
-;; Provider Registration
-;; ============================================================================
+(defmethod core/supports-streaming? :openrouter [_] true)
 
-(defn register-openrouter-provider!
-  "Register OpenRouter provider in the global registry"
-  []
-  (core/register-provider! "openrouter" create-openrouter-provider))
+(defmethod core/supports-function-calling? :openrouter [_] true)
+
+(defmethod core/get-rate-limits :openrouter [_]
+  {:requests-per-minute 3500
+   :tokens-per-minute 90000})
+
+(defmethod core/health-check :openrouter
+  [_ thread-pools config]
+  (cp/future (:health-checks thread-pools)
+    (try
+      (let [response (http/get (str (:api-base config "https://openrouter.ai/api/v1") "/models")
+                              {:headers {"Authorization" (str "Bearer " (:api-key config))}
+                               :timeout 5000})]
+        (= 200 (:status response)))
+      (catch Exception e
+        (log/warn "OpenRouter health check failed" {:error (.getMessage e)})
+        false))))
+
+(defmethod core/get-cost-per-token :openrouter
+  [_ model]
+  (get default-cost-map model {:input 0.0 :output 0.0}))
 
 ;; ============================================================================
 ;; Streaming Support
@@ -322,6 +298,3 @@
          :provider "openrouter"
          :error (.getMessage e)
          :error-type (type e)}))))
-
-;; Auto-register the provider when namespace is loaded
-(register-openrouter-provider!)

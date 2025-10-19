@@ -159,110 +159,86 @@
   (contains? magistral-models model))
 
 ;; ============================================================================
-;; Mistral Provider Record
+;; Mistral Provider Multimethod Implementations
 ;; ============================================================================
 
-(defrecord MistralProvider [api-key api-base rate-limits cost-map timeout]
-  core/LLMProvider
-  
-  (provider-name [_] "mistral")
-  
-  (transform-request [provider request]
-    (let [model (:model request)
-          reasoning-effort (:reasoning-effort request)
-          messages (:messages request)
-          ;; Add reasoning system prompt if applicable
-          transformed-messages (if (and reasoning-effort (supports-reasoning? model))
-                                (add-reasoning-system-prompt 
-                                  (transform-messages messages)
-                                  reasoning-effort)
-                                (transform-messages messages))
-          transformed {:model model
-                      :messages transformed-messages
-                      :max_tokens (:max-tokens request)
-                      :temperature (:temperature request)
-                      :top_p (:top-p request)
-                      :stop (:stop request)
-                      :stream (:stream request false)}]
-      
-      ;; Add function calling if present
-      (cond-> transformed
-        (:tools request) (assoc :tools (transform-tools (:tools request)))
-        (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request))))))
-  
-  (make-request [provider transformed-request thread-pools telemetry]
-    (let [url (str (:api-base provider) "/chat/completions")]
-      (cp/future (:api-calls thread-pools)
-        (let [start-time (System/currentTimeMillis)
-              response (http/post url
-                                  {:headers {"Authorization" (str "Bearer " (:api-key provider))
-                                             "Content-Type" "application/json"
-                                             "User-Agent" "litellm-clj/1.0.0"}
-                                   :body (json/encode transformed-request)
-                                   :timeout (:timeout provider 30000)
-                                   :as :json})
-              duration (- (System/currentTimeMillis) start-time)]
-          
-          ;; Handle errors
-          (when (>= (:status response) 400)
-            (handle-error-response provider response))
-          
-          response))))
-  
-  (transform-response [provider response]
-    (let [body (:body response)]
-      {:id (:id body)
-       :object (:object body)
-       :created (:created body)
-       :model (:model body)
-       :choices (map transform-choice (:choices body))
-       :usage (transform-usage (:usage body))}))
-  
-  (supports-streaming? [_] true)
-  
-  (supports-function-calling? [_] true)
-  
-  (get-rate-limits [provider]
-    (:rate-limits provider {:requests-per-minute 1000
-                           :tokens-per-minute 1000000}))
-  
-  (health-check [provider thread-pools]
-    (cp/future (:health-checks thread-pools)
-      (try
-        (let [response (http/get (str (:api-base provider) "/models")
-                                {:headers {"Authorization" (str "Bearer " (:api-key provider))}
-                                 :timeout 5000})]
-          (= 200 (:status response)))
-        (catch Exception e
-          (log/warn "Mistral health check failed" {:error (.getMessage e)})
-          false))))
-  
-  (get-cost-per-token [provider model]
-    (get (:cost-map provider) model {:input 0.0 :output 0.0})))
+(defmethod core/transform-request :mistral
+  [_ request config]
+  (let [model (:model request)
+        reasoning-effort (:reasoning-effort request)
+        messages (:messages request)
+        ;; Add reasoning system prompt if applicable
+        transformed-messages (if (and reasoning-effort (supports-reasoning? model))
+                              (add-reasoning-system-prompt 
+                                (transform-messages messages)
+                                reasoning-effort)
+                              (transform-messages messages))
+        transformed {:model model
+                    :messages transformed-messages
+                    :max_tokens (:max-tokens request)
+                    :temperature (:temperature request)
+                    :top_p (:top-p request)
+                    :stop (:stop request)
+                    :stream (:stream request false)}]
+    
+    ;; Add function calling if present
+    (cond-> transformed
+      (:tools request) (assoc :tools (transform-tools (:tools request)))
+      (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request))))))
 
-;; ============================================================================
-;; Provider Factory
-;; ============================================================================
+(defmethod core/make-request :mistral
+  [_ transformed-request thread-pools telemetry config]
+  (let [url (str (:api-base config "https://api.mistral.ai/v1") "/chat/completions")]
+    (cp/future (:api-calls thread-pools)
+      (let [start-time (System/currentTimeMillis)
+            response (http/post url
+                                {:headers {"Authorization" (str "Bearer " (:api-key config))
+                                           "Content-Type" "application/json"
+                                           "User-Agent" "litellm-clj/1.0.0"}
+                                 :body (json/encode transformed-request)
+                                 :timeout (:timeout config 30000)
+                                 :as :json})
+            duration (- (System/currentTimeMillis) start-time)]
+        
+        ;; Handle errors
+        (when (>= (:status response) 400)
+          (handle-error-response :mistral response))
+        
+        response))))
 
-(defn create-mistral-provider
-  "Create Mistral provider instance"
-  [config]
-  (map->MistralProvider
-    {:api-key (:api-key config)
-     :api-base (:api-base config "https://api.mistral.ai/v1")
-     :rate-limits (:rate-limits config {:requests-per-minute 1000
-                                       :tokens-per-minute 1000000})
-     :cost-map (merge default-cost-map (:cost-map config {}))
-     :timeout (:timeout config 30000)}))
+(defmethod core/transform-response :mistral
+  [_ response]
+  (let [body (:body response)]
+    {:id (:id body)
+     :object (:object body)
+     :created (:created body)
+     :model (:model body)
+     :choices (map transform-choice (:choices body))
+     :usage (transform-usage (:usage body))}))
 
-;; ============================================================================
-;; Provider Registration
-;; ============================================================================
+(defmethod core/supports-streaming? :mistral [_] true)
 
-(defn register-mistral-provider!
-  "Register Mistral provider in the global registry"
-  []
-  (core/register-provider! "mistral" create-mistral-provider))
+(defmethod core/supports-function-calling? :mistral [_] true)
+
+(defmethod core/get-rate-limits :mistral [_]
+  {:requests-per-minute 1000
+   :tokens-per-minute 1000000})
+
+(defmethod core/health-check :mistral
+  [_ thread-pools config]
+  (cp/future (:health-checks thread-pools)
+    (try
+      (let [response (http/get (str (:api-base config "https://api.mistral.ai/v1") "/models")
+                              {:headers {"Authorization" (str "Bearer " (:api-key config))}
+                               :timeout 5000})]
+        (= 200 (:status response)))
+      (catch Exception e
+        (log/warn "Mistral health check failed" {:error (.getMessage e)})
+        false))))
+
+(defmethod core/get-cost-per-token :mistral
+  [_ model]
+  (get default-cost-map model {:input 0.0 :output 0.0}))
 
 ;; ============================================================================
 ;; Streaming Support
@@ -397,6 +373,3 @@
          :provider "mistral"
          :error (.getMessage e)
          :error-type (type e)}))))
-
-;; Auto-register the provider when namespace is loaded
-(register-mistral-provider!)
