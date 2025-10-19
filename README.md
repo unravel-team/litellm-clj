@@ -5,15 +5,15 @@ A Clojure port of the popular [LiteLLM](https://github.com/BerriAI/litellm) libr
 ## Model Provider Support Matrix
 
 | Provider     | Status       | Models                                     | Function Calling | Streaming |
-|--------------|--------------|--------------------------------------------|------------------|-----------|
+|--------------|--------------|--------------------------------------------|--------------------|-----------|
 | OpenAI       | ✅ Supported | GPT-3.5-Turbo, GPT-4, GPT-4o               | ✅               | ✅        |
 | Anthropic    | ✅ Supported | Claude 3 (Opus, Sonnet, Haiku), Claude 2.x | ❌               | ✅        |
 | OpenRouter   | ✅ Supported | All OpenRouter models                      | ✅               | ✅        |
-| Azure OpenAI | 🔄 Planned   | -                                          | -                | -         |
 | Google Gemini| ✅ Supported | Gemini Pro, Gemini Pro Vision, Gemini Ultra| ❌               | ✅        |
+| Mistral      | ✅ Supported | Mistral Small/Medium/Large, Codestral, Magistral | ✅               | ✅        |
+| Azure OpenAI | 🔄 Planned   | -                                          | -                | -         |
 | Cohere       | 🔄 Planned   | Command                                    | -                | -         |
 | Hugging Face | 🔄 Planned   | Various open models                        | -                | -         |
-| Mistral      | 🔄 Planned   | Mistral, Mixtral                           | -                | -         |
 | Ollama       | 🔄 Planned   | Local models                               | -                | -         |
 | Together AI  | 🔄 Planned   | Various open models                        | -                | -         |
 | Replicate    | 🔄 Planned   | Various open models                        | -                | -         |
@@ -33,12 +33,12 @@ A Clojure port of the popular [LiteLLM](https://github.com/BerriAI/litellm) libr
 - **Anthropic**: Claude 3 (Opus, Sonnet, Haiku), Claude 2.x
 - **Google Gemini**: Gemini Pro, Gemini Pro Vision, Gemini Ultra with vision/multimodal support
 - **OpenRouter**: Access to multiple providers through a single API (OpenAI, Anthropic, Google, Meta, etc.)
+- **Mistral AI**: Mistral Small/Medium/Large, Codestral (code generation), Magistral (reasoning), and embedding models
 
 ## Planned Providers
 
 - Azure OpenAI
 - Cohere
-- Mistral AI
 - Hugging Face
 - Ollama (local models)
 - Together AI
@@ -212,6 +212,48 @@ export GEMINI_API_KEY=your-api-key-here
    :top_p 0.95
    :top_k 40
    :max_tokens 1024})
+```
+
+### Mistral AI
+
+Set your API key:
+
+```bash
+export MISTRAL_API_KEY=your-api-key-here
+```
+
+```clojure
+;; Use Mistral Small for fast, cost-effective responses
+(litellm/completion system
+  {:model "mistral/mistral-small-latest"
+   :messages [{:role "user" :content "Explain quantum computing"}]})
+
+;; Use Mistral Large for complex reasoning tasks
+(litellm/completion system
+  {:model "mistral/mistral-large-latest"
+   :messages [{:role "user" :content "Analyze this complex problem..."}]
+   :temperature 0.7})
+
+;; Use Codestral for code generation
+(litellm/completion system
+  {:model "mistral/codestral-latest"
+   :messages [{:role "user" :content "Write a Clojure function to parse JSON"}]})
+
+;; Use Magistral models with reasoning support
+(litellm/completion system
+  {:model "mistral/magistral-medium-2506"
+   :messages [{:role "user" :content "Solve this math problem step by step"}]
+   :reasoning-effort "medium"})  ;; Options: "low", "medium", "high"
+
+;; Function calling with Mistral
+(litellm/completion system
+  {:model "mistral/mistral-large-latest"
+   :messages [{:role "user" :content "What's the weather in Paris?"}]
+   :tools [{:type "function"
+            :function {:name "get_weather"
+                      :description "Get current weather"
+                      :parameters {:type "object"
+                                  :properties {:location {:type "string"}}}}}]})
 ```
 
 ### Ollama (Local Models)
