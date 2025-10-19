@@ -109,105 +109,80 @@
    "claude-instant-1.2" "claude-instant-1.2"})
 
 ;; ============================================================================
-;; Anthropic Provider Record
+;; Anthropic Provider Multimethod Implementations
 ;; ============================================================================
 
-(defrecord AnthropicProvider [api-key api-base model-mapping rate-limits cost-map timeout]
-  core/LLMProvider
-  
-  (provider-name [_] "anthropic")
-  
-  (transform-request [provider request]
-    (let [model (core/extract-model-name (:model request))
-          mapped-model (get (:model-mapping provider) model model)
-          messages-data (transform-messages (:messages request))
-          transformed {:model mapped-model
-                       :max_tokens (:max-tokens request 1024)
-                       :temperature (:temperature request 0.7)
-                       :top_p (:top-p request 1.0)
-                       :stream (:stream request false)}]
-      
-      ;; Add system prompt if present
-      (cond-> transformed
-        (:system messages-data) (assoc :system (:system messages-data))
-        (:messages messages-data) (assoc :messages (:messages messages-data)))))
-  
-  (make-request [provider transformed-request thread-pools telemetry]
-    (let [url (str (:api-base provider) "/v1/messages")]
-      (cp/future (:api-calls thread-pools)
-        (let [start-time (System/currentTimeMillis)
-              response (http/post url
-                                  {:headers {"x-api-key" (:api-key provider)
-                                             "anthropic-version" "2023-06-01"
-                                             "Content-Type" "application/json"
-                                             "User-Agent" "litellm-clj/1.0.0"}
-                                   :body (json/encode transformed-request)
-                                   :timeout (:timeout provider 30000)
-                                   :as :json})
-              duration (- (System/currentTimeMillis) start-time)]
-          
-          ;; Handle errors
-          (when (>= (:status response) 400)
-            (handle-error-response provider response))
-          
-          response))))
-  
-  (transform-response [provider response]
-    (let [body (:body response)]
-      {:id (:id body)
-       :object "chat.completion"
-       :created (quot (System/currentTimeMillis) 1000)
-       :model (:model body)
-       :choices [(transform-choice body 0)]
-       :usage (transform-usage (:usage body))}))
-  
-  (supports-streaming? [_] true)
-  
-  (supports-function-calling? [_] false) ;; Anthropic doesn't support function calling yet
-  
-  (get-rate-limits [provider]
-    (:rate-limits provider {:requests-per-minute 240
-                           :tokens-per-minute 60000}))
-  
-  (health-check [provider thread-pools]
-    (cp/future (:health-checks thread-pools)
-      (try
-        (let [response (http/get (str (:api-base provider) "/v1/models")
-                                {:headers {"x-api-key" (:api-key provider)
-                                           "anthropic-version" "2023-06-01"}
-                                 :timeout 5000})]
-          (= 200 (:status response)))
-        (catch Exception e
-          (log/warn "Anthropic health check failed" {:error (.getMessage e)})
-          false))))
-  
-  (get-cost-per-token [provider model]
-    (get (:cost-map provider) model {:input 0.0 :output 0.0})))
+(defmethod core/transform-request :anthropic
+  [_ request config]
+  (let [model (core/extract-model-name (:model request))
+        mapped-model (get (:model-mapping config default-model-mapping) model model)
+        messages-data (transform-messages (:messages request))
+        transformed {:model mapped-model
+                     :max_tokens (:max-tokens request 1024)
+                     :temperature (:temperature request 0.7)
+                     :top_p (:top-p request 1.0)
+                     :stream (:stream request false)}]
+    
+    ;; Add system prompt if present
+    (cond-> transformed
+      (:system messages-data) (assoc :system (:system messages-data))
+      (:messages messages-data) (assoc :messages (:messages messages-data)))))
 
-;; ============================================================================
-;; Provider Factory
-;; ============================================================================
+(defmethod core/make-request :anthropic
+  [_ transformed-request thread-pools telemetry config]
+  (let [url (str (:api-base config "https://api.anthropic.com") "/v1/messages")]
+    (cp/future (:api-calls thread-pools)
+      (let [start-time (System/currentTimeMillis)
+            response (http/post url
+                                {:headers {"x-api-key" (:api-key config)
+                                           "anthropic-version" "2023-06-01"
+                                           "Content-Type" "application/json"
+                                           "User-Agent" "litellm-clj/1.0.0"}
+                                 :body (json/encode transformed-request)
+                                 :timeout (:timeout config 30000)
+                                 :as :json})
+            duration (- (System/currentTimeMillis) start-time)]
+        
+        ;; Handle errors
+        (when (>= (:status response) 400)
+          (handle-error-response :anthropic response))
+        
+        response))))
 
-(defn create-anthropic-provider
-  "Create Anthropic provider instance"
-  [config]
-  (map->AnthropicProvider
-    {:api-key (:api-key config)
-     :api-base (:api-base config "https://api.anthropic.com")
-     :model-mapping (merge default-model-mapping (:model-mapping config {}))
-     :rate-limits (:rate-limits config {:requests-per-minute 240
-                                       :tokens-per-minute 60000})
-     :cost-map (merge default-cost-map (:cost-map config {}))
-     :timeout (:timeout config 30000)}))
+(defmethod core/transform-response :anthropic
+  [_ response]
+  (let [body (:body response)]
+    {:id (:id body)
+     :object "chat.completion"
+     :created (quot (System/currentTimeMillis) 1000)
+     :model (:model body)
+     :choices [(transform-choice body 0)]
+     :usage (transform-usage (:usage body))}))
 
-;; ============================================================================
-;; Provider Registration
-;; ============================================================================
+(defmethod core/supports-streaming? :anthropic [_] true)
 
-(defn register-anthropic-provider!
-  "Register Anthropic provider in the global registry"
-  []
-  (core/register-provider! "anthropic" create-anthropic-provider))
+(defmethod core/supports-function-calling? :anthropic [_] false)
+
+(defmethod core/get-rate-limits :anthropic [_]
+  {:requests-per-minute 240
+   :tokens-per-minute 60000})
+
+(defmethod core/health-check :anthropic
+  [_ thread-pools config]
+  (cp/future (:health-checks thread-pools)
+    (try
+      (let [response (http/get (str (:api-base config "https://api.anthropic.com") "/v1/models")
+                              {:headers {"x-api-key" (:api-key config)
+                                         "anthropic-version" "2023-06-01"}
+                               :timeout 5000})]
+        (= 200 (:status response)))
+      (catch Exception e
+        (log/warn "Anthropic health check failed" {:error (.getMessage e)})
+        false))))
+
+(defmethod core/get-cost-per-token :anthropic
+  [_ model]
+  (get default-cost-map model {:input 0.0 :output 0.0}))
 
 ;; ============================================================================
 ;; Streaming Support
@@ -304,6 +279,3 @@
          :provider "anthropic"
          :error (.getMessage e)
          :error-type (type e)}))))
-
-;; Auto-register the provider when namespace is loaded
-(register-anthropic-provider!)

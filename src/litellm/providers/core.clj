@@ -5,38 +5,52 @@
             [litellm.schemas :as schemas]))
 
 ;; ============================================================================
-;; Provider Protocol
+;; Provider Multimethods
 ;; ============================================================================
 
-(defprotocol LLMProvider
-  "Protocol for LLM providers"
-  
-  (provider-name [provider] 
-    "Get the name of this provider (e.g., 'openai', 'anthropic')")
-  
-  (transform-request [provider request] 
-    "Transform a standard request to provider-specific format")
-  
-  (make-request [provider transformed-request thread-pools telemetry] 
-    "Make HTTP request to provider API, returns a future")
-  
-  (transform-response [provider response] 
-    "Transform provider response to standard format")
-  
-  (supports-streaming? [provider] 
-    "Check if provider supports streaming responses")
-  
-  (supports-function-calling? [provider] 
-    "Check if provider supports function calling")
-  
-  (get-rate-limits [provider] 
-    "Get provider rate limits as a map")
-  
-  (health-check [provider thread-pools] 
-    "Perform health check, returns a future with boolean result")
-  
-  (get-cost-per-token [provider model] 
-    "Get cost per token for a specific model"))
+(defmulti transform-request
+  "Transform a standard request to provider-specific format"
+  (fn [provider-name request config] provider-name))
+
+(defmulti make-request
+  "Make HTTP request to provider API, returns a future"
+  (fn [provider-name transformed-request thread-pools telemetry config] provider-name))
+
+(defmulti transform-response
+  "Transform provider response to standard format"
+  (fn [provider-name response] provider-name))
+
+(defmulti supports-streaming?
+  "Check if provider supports streaming responses"
+  identity)
+
+(defmulti supports-function-calling?
+  "Check if provider supports function calling"
+  identity)
+
+(defmulti get-rate-limits
+  "Get provider rate limits as a map"
+  identity)
+
+(defmulti health-check
+  "Perform health check, returns a future with boolean result"
+  (fn [provider-name thread-pools config] provider-name))
+
+(defmulti get-cost-per-token
+  "Get cost per token for a specific model"
+  (fn [provider-name model] provider-name))
+
+;; ============================================================================
+;; Default Implementations
+;; ============================================================================
+
+(defmethod supports-streaming? :default [_] false)
+(defmethod supports-function-calling? :default [_] false)
+(defmethod get-rate-limits :default [_]
+  {:requests-per-minute 1000
+   :tokens-per-minute 50000})
+(defmethod get-cost-per-token :default [_ _]
+  {:input 0.0 :output 0.0})
 
 ;; ============================================================================
 ;; Provider Validation
@@ -44,21 +58,21 @@
 
 (defn validate-request
   "Validate request against provider capabilities"
-  [provider request]
-  (when (and (:stream request) (not (supports-streaming? provider)))
+  [provider-name request]
+  (when (and (:stream request) (not (supports-streaming? provider-name)))
     (throw (ex-info "Provider doesn't support streaming" 
-                    {:provider (provider-name provider)
+                    {:provider provider-name
                      :request request})))
   
   (when (and (or (:tools request) (:functions request)) 
-             (not (supports-function-calling? provider)))
+             (not (supports-function-calling? provider-name)))
     (throw (ex-info "Provider doesn't support function calling"
-                    {:provider (provider-name provider)
+                    {:provider provider-name
                      :request request})))
   
   (when-not (schemas/valid-request? request)
     (throw (ex-info "Invalid request format"
-                    {:provider (provider-name provider)
+                    {:provider provider-name
                      :request request
                      :errors (schemas/explain-request request)}))))
 
@@ -67,14 +81,14 @@
 ;; ============================================================================
 
 (defn extract-provider-name
-  "Extract provider name from model string (e.g., 'openai/gpt-4' -> 'openai')"
+  "Extract provider name from model string (e.g., 'openai/gpt-4' -> :openai)"
   [model]
   (if (string? model)
     (let [parts (str/split model #"/")]
-      (if (> (count parts) 1)
-        (first parts)
-        "openai")) ; Default to openai for bare model names
-    (str model)))
+      (keyword (if (> (count parts) 1)
+                 (first parts)
+                 "openai"))) ; Default to openai for bare model names
+    (keyword (str model))))
 
 (defn extract-model-name
   "Extract actual model name from model string (e.g., 'openai/gpt-4' -> 'gpt-4')"
@@ -87,7 +101,7 @@
     (str model)))
 
 (defn parse-model-string
-  "Parse model string into provider and model components"
+  "Parse model string into provider (keyword) and model components"
   [model]
   {:provider (extract-provider-name model)
    :model (extract-model-name model)
@@ -167,7 +181,7 @@
   "Create a provider-specific error"
   [provider message & {:keys [status code data]}]
   (ex-info message
-           (cond-> {:provider (if (string? provider) provider (provider-name provider))
+           (cond-> {:provider (if (keyword? provider) (name provider) (str provider))
                     :type :provider-error}
              status (assoc :status status)
              code (assoc :code code)
@@ -204,34 +218,18 @@
                   :code :quota-exceeded))
 
 ;; ============================================================================
-;; Provider Registry
+;; Provider Discovery
 ;; ============================================================================
 
-(def ^:private provider-registry (atom {}))
-
-(defn register-provider!
-  "Register a provider in the global registry"
-  [provider-name provider-factory]
-  (swap! provider-registry assoc provider-name provider-factory)
-  (log/info "Registered provider" {:provider provider-name}))
-
-(defn get-provider-factory
-  "Get provider factory by name"
-  [provider-name]
-  (get @provider-registry provider-name))
-
-(defn list-registered-providers
-  "List all registered provider names"
+(defn list-available-providers
+  "List all available providers by checking multimethod implementations"
   []
-  (keys @provider-registry))
+  (-> transform-request methods keys (disj :default) set))
 
-(defn create-provider
-  "Create provider instance from registry"
-  [provider-name config]
-  (if-let [factory (get-provider-factory provider-name)]
-    (factory config)
-    (throw (ex-info "Unknown provider" {:provider provider-name
-                                       :available (list-registered-providers)}))))
+(defn provider-available?
+  "Check if a provider is available (has multimethod implementations)"
+  [provider-name]
+  (contains? (list-available-providers) provider-name))
 
 ;; ============================================================================
 ;; Provider Configuration Helpers
@@ -265,10 +263,9 @@
 
 (defn provider-supports-model?
   "Check if provider supports a specific model"
-  [provider model]
+  [provider-name model]
   ;; This is a basic implementation - providers can override this
-  (let [provider-name (provider-name provider)
-        model-provider (extract-provider-name model)]
+  (let [model-provider (extract-provider-name model)]
     (= provider-name model-provider)))
 
 (defn estimate-tokens
@@ -289,13 +286,13 @@
 
 (defn calculate-cost
   "Calculate cost for a request/response"
-  [provider model prompt-tokens completion-tokens]
+  [provider-name model prompt-tokens completion-tokens]
   (try
-    (let [cost-per-token (get-cost-per-token provider model)]
+    (let [cost-per-token (get-cost-per-token provider-name model)]
       (+ (* prompt-tokens (:input cost-per-token 0))
          (* completion-tokens (:output cost-per-token 0))))
     (catch Exception e
-      (log/warn "Error calculating cost" {:provider (provider-name provider) :model model :error (.getMessage e)})
+      (log/warn "Error calculating cost" {:provider provider-name :model model :error (.getMessage e)})
       0.0)))
 
 ;; ============================================================================
@@ -304,16 +301,16 @@
 
 (defn provider-status
   "Get comprehensive provider status"
-  [provider]
-  {:name (provider-name provider)
-   :supports-streaming (supports-streaming? provider)
-   :supports-function-calling (supports-function-calling? provider)
-   :rate-limits (get-rate-limits provider)})
+  [provider-name]
+  {:name provider-name
+   :supports-streaming (supports-streaming? provider-name)
+   :supports-function-calling (supports-function-calling? provider-name)
+   :rate-limits (get-rate-limits provider-name)})
 
 (defn log-provider-status
   "Log provider status for debugging"
-  [provider]
-  (log/info "Provider status" (provider-status provider)))
+  [provider-name]
+  (log/info "Provider status" (provider-status provider-name)))
 
 ;; ============================================================================
 ;; Provider Testing Utilities
@@ -321,22 +318,22 @@
 
 (defn test-provider
   "Test provider with a simple request"
-  [provider thread-pools telemetry]
+  [provider-name thread-pools telemetry config]
   (let [test-request {:model "test"
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 1}]
     (try
-      (validate-request provider test-request)
-      (let [transformed (transform-request provider test-request)
-            response-future (make-request provider transformed thread-pools telemetry)
+      (validate-request provider-name test-request)
+      (let [transformed (transform-request provider-name test-request config)
+            response-future (make-request provider-name transformed thread-pools telemetry config)
             response @response-future
-            standard-response (transform-response provider response)]
+            standard-response (transform-response provider-name response)]
         {:success true
-         :provider (provider-name provider)
+         :provider provider-name
          :response standard-response})
       (catch Exception e
         {:success false
-         :provider (provider-name provider)
+         :provider provider-name
          :error (.getMessage e)}))))
 
 ;; ============================================================================
@@ -345,15 +342,15 @@
 
 (defn compare-providers
   "Compare multiple providers on various capabilities"
-  [providers]
-  (map (fn [provider]
-         (assoc (provider-status provider)
+  [provider-names]
+  (map (fn [provider-name]
+         (assoc (provider-status provider-name)
                 :health-check-available (try
-                                        (some? (health-check provider nil))
+                                        (some? (health-check provider-name nil nil))
                                         (catch Exception _ false))))
-       providers))
+       provider-names))
 
 (defn find-providers-for-model
   "Find all providers that support a given model"
-  [providers model]
-  (filter #(provider-supports-model? % model) providers))
+  [provider-names model]
+  (filter #(provider-supports-model? % model) provider-names))

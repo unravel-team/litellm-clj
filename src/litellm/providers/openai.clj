@@ -152,107 +152,82 @@
    "gpt-3.5-turbo" "gpt-3.5-turbo"})
 
 ;; ============================================================================
-;; OpenAI Provider Record
+;; OpenAI Provider Multimethod Implementations
 ;; ============================================================================
 
-(defrecord OpenAIProvider [api-key api-base model-mapping rate-limits cost-map timeout]
-  core/LLMProvider
-  
-  (provider-name [_] "openai")
-  
-  (transform-request [provider request]
-    (let [model (:model request)
-          transformed {:model model
-                      :messages (transform-messages (:messages request))
-                      :max_tokens (:max-tokens request)
-                      :temperature (:temperature request)
-                      :top_p (:top-p request)
-                      :frequency_penalty (:frequency-penalty request)
-                      :presence_penalty (:presence-penalty request)
-                      :stop (:stop request)
-                      :stream (:stream request false)}]
-      
-      ;; Add function calling if present
-      (cond-> transformed
-        (:tools request) (assoc :tools (transform-tools (:tools request)))
-        (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request)))
-        (:functions request) (assoc :functions (transform-functions (:functions request)))
-        (:function-call request) (assoc :function_call (transform-function-call (:function-call request))))))
-  
-  (make-request [provider transformed-request thread-pools telemetry]
-    (let [url (str (:api-base provider) "/chat/completions")]
-      (cp/future (:api-calls thread-pools)
-        (let [start-time (System/currentTimeMillis)
-              response (http/post url
-                                  {:headers {"Authorization" (str "Bearer " (:api-key provider))
-                                             "Content-Type" "application/json"
-                                             "User-Agent" "litellm-clj/1.0.0"}
-                                   :body (json/encode transformed-request)
-                                   :timeout (:timeout provider 30000)
-                                   :as :json})
-              duration (- (System/currentTimeMillis) start-time)]
-          
-          ;; Handle errors
-          (when (>= (:status response) 400)
-            (handle-error-response provider response))
-          
-          response))))
-  
-  (transform-response [provider response]
-    (let [body (:body response)]
-      {:id (:id body)
-       :object (:object body)
-       :created (:created body)
-       :model (:model body)
-       :choices (map transform-choice (:choices body))
-       :usage (transform-usage (:usage body))}))
-  
-  (supports-streaming? [_] true)
-  
-  (supports-function-calling? [_] true)
-  
-  (get-rate-limits [provider]
-    (:rate-limits provider {:requests-per-minute 3500
-                           :tokens-per-minute 90000}))
-  
-  (health-check [provider thread-pools]
-    (cp/future (:health-checks thread-pools)
-      (try
-        (let [response (http/get (str (:api-base provider) "/models")
-                                {:headers {"Authorization" (str "Bearer " (:api-key provider))}
-                                 :timeout 5000})]
-          (= 200 (:status response)))
-        (catch Exception e
-          (log/warn "OpenAI health check failed" {:error (.getMessage e)})
-          false))))
-  
-  (get-cost-per-token [provider model]
-    (get (:cost-map provider) model {:input 0.0 :output 0.0})))
+(defmethod core/transform-request :openai
+  [_ request config]
+  (let [model (:model request)
+        transformed {:model model
+                    :messages (transform-messages (:messages request))
+                    :max_tokens (:max-tokens request)
+                    :temperature (:temperature request)
+                    :top_p (:top-p request)
+                    :frequency_penalty (:frequency-penalty request)
+                    :presence_penalty (:presence-penalty request)
+                    :stop (:stop request)
+                    :stream (:stream request false)}]
+    
+    ;; Add function calling if present
+    (cond-> transformed
+      (:tools request) (assoc :tools (transform-tools (:tools request)))
+      (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request)))
+      (:functions request) (assoc :functions (transform-functions (:functions request)))
+      (:function-call request) (assoc :function_call (transform-function-call (:function-call request))))))
 
-;; ============================================================================
-;; Provider Factory
-;; ============================================================================
+(defmethod core/make-request :openai
+  [_ transformed-request thread-pools telemetry config]
+  (let [url (str (:api-base config "https://api.openai.com/v1") "/chat/completions")]
+    (cp/future (:api-calls thread-pools)
+      (let [start-time (System/currentTimeMillis)
+            response (http/post url
+                                {:headers {"Authorization" (str "Bearer " (:api-key config))
+                                           "Content-Type" "application/json"
+                                           "User-Agent" "litellm-clj/1.0.0"}
+                                 :body (json/encode transformed-request)
+                                 :timeout (:timeout config 30000)
+                                 :as :json})
+            duration (- (System/currentTimeMillis) start-time)]
+        
+        ;; Handle errors
+        (when (>= (:status response) 400)
+          (handle-error-response :openai response))
+        
+        response))))
 
-(defn create-openai-provider
-  "Create OpenAI provider instance"
-  [config]
-  (map->OpenAIProvider
-    {:api-key (:api-key config)
-     :api-base (:api-base config "https://api.openai.com/v1")
-     :model-mapping (merge default-model-mapping (:model-mapping config {}))
-     :rate-limits (:rate-limits config {:requests-per-minute 3500
-                                       :tokens-per-minute 90000})
-     :cost-map (merge default-cost-map (:cost-map config {}))
-     :timeout (:timeout config 30000)}))
+(defmethod core/transform-response :openai
+  [_ response]
+  (let [body (:body response)]
+    {:id (:id body)
+     :object (:object body)
+     :created (:created body)
+     :model (:model body)
+     :choices (map transform-choice (:choices body))
+     :usage (transform-usage (:usage body))}))
 
-;; ============================================================================
-;; Provider Registration
-;; ============================================================================
+(defmethod core/supports-streaming? :openai [_] true)
 
-(defn register-openai-provider!
-  "Register OpenAI provider in the global registry"
-  []
-  (core/register-provider! "openai" create-openai-provider))
+(defmethod core/supports-function-calling? :openai [_] true)
+
+(defmethod core/get-rate-limits :openai [_]
+  {:requests-per-minute 3500
+   :tokens-per-minute 90000})
+
+(defmethod core/health-check :openai
+  [_ thread-pools config]
+  (cp/future (:health-checks thread-pools)
+    (try
+      (let [response (http/get (str (:api-base config "https://api.openai.com/v1") "/models")
+                              {:headers {"Authorization" (str "Bearer " (:api-key config))}
+                               :timeout 5000})]
+        (= 200 (:status response)))
+      (catch Exception e
+        (log/warn "OpenAI health check failed" {:error (.getMessage e)})
+        false))))
+
+(defmethod core/get-cost-per-token :openai
+  [_ model]
+  (get default-cost-map model {:input 0.0 :output 0.0}))
 
 ;; ============================================================================
 ;; Streaming Support
@@ -349,6 +324,3 @@
          :provider "openai"
          :error (.getMessage e)
          :error-type (type e)}))))
-
-;; Auto-register the provider when namespace is loaded
-(register-openai-provider!)
