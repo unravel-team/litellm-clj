@@ -4,6 +4,7 @@
             [litellm.schemas :as schemas]
             [litellm.threadpool :as threadpool]
             [litellm.providers.core :as providers]
+            [litellm.streaming :as streaming]
             [litellm.providers.openai] ; Load to register provider
             [litellm.providers.anthropic] ; Load to register provider
             [litellm.providers.openrouter] ; Load to register provider
@@ -109,20 +110,26 @@
   [system request]
   {:pre [(schemas/valid-request? request)]}
   
-  (let [provider (select-provider system request)
-        thread-pools (:thread-pools system)]
+  (let [provider-name (providers/extract-provider-name (:model request))
+        thread-pools (:thread-pools system)
+        config (get-in system [:config :providers (name provider-name)])]
     
     ;; Validate request against provider capabilities
-    (providers/validate-request provider request)
+    (providers/validate-request provider-name request)
     
     ;; Transform request
-    (let [transformed-request (providers/transform-request provider request)]
+    (let [transformed-request (providers/transform-request provider-name request config)]
       
-      ;; Make the actual request
-      (let [response-future (providers/make-request provider transformed-request thread-pools nil)
-            response @response-future]
-        ;; Transform response
-        (providers/transform-response provider response)))))
+      ;; Check if streaming
+      (if (:stream request)
+        ;; Streaming request - return channel
+        (providers/make-streaming-request provider-name transformed-request thread-pools config)
+        
+        ;; Non-streaming request
+        (let [response-future (providers/make-request provider-name transformed-request thread-pools nil config)
+              response @response-future]
+          ;; Transform response
+          (providers/transform-response provider-name response))))))
 
 ;; ============================================================================
 ;; Main API Functions
