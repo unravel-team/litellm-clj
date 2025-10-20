@@ -16,9 +16,17 @@
   "Make HTTP request to provider API, returns a future"
   (fn [provider-name transformed-request thread-pools telemetry config] provider-name))
 
+(defmulti make-streaming-request
+  "Make streaming HTTP request to provider API, returns a core.async channel"
+  (fn [provider-name transformed-request thread-pools config] provider-name))
+
 (defmulti transform-response
   "Transform provider response to standard format"
   (fn [provider-name response] provider-name))
+
+(defmulti transform-streaming-chunk
+  "Transform provider streaming chunk to standard format"
+  (fn [provider-name chunk] provider-name))
 
 (defmulti supports-streaming?
   "Check if provider supports streaming responses"
