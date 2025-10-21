@@ -1,10 +1,12 @@
 (ns litellm.providers.anthropic
   "Anthropic provider implementation for LiteLLM"
   (:require [litellm.providers.core :as core]
+            [litellm.streaming :as streaming]
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
+            [clojure.core.async :as async :refer [go >!]]
             [com.climate.claypoole :as cp]))
 
 ;; ============================================================================
@@ -188,39 +190,76 @@
 ;; Streaming Support
 ;; ============================================================================
 
-(defn parse-sse-line
-  "Parse a Server-Sent Events line"
-  [line]
-  (when (str/starts-with? line "data: ")
-    (let [data (subs line 6)]
-      (when-not (= data "[DONE]")
-        (try
-          (json/decode data true)
-          (catch Exception e
-            (log/debug "Failed to parse SSE line" {:line line :error (.getMessage e)})
-            nil))))))
+(defmethod core/transform-streaming-chunk :anthropic
+  [_ chunk]
+  (let [event-type (:type chunk)]
+    (case event-type
+      "content_block_delta" {:id (:message_id chunk)
+                             :object "chat.completion.chunk"
+                             :created (quot (System/currentTimeMillis) 1000)
+                             :model (:model chunk)
+                             :choices [{:index 0
+                                       :delta {:role :assistant
+                                              :content (get-in chunk [:delta :text])}
+                                       :finish-reason nil}]}
+      "message_stop" {:id (:message_id chunk)
+                     :object "chat.completion.chunk"
+                     :created (quot (System/currentTimeMillis) 1000)
+                     :model (:model chunk)
+                     :choices [{:index 0
+                               :delta {}
+                               :finish-reason :stop}]}
+      nil)))
 
-(defn transform-streaming-chunk
-  "Transform Anthropic streaming chunk to standard format"
-  [chunk]
-  {:id (:id chunk)
-   :object "chat.completion.chunk"
-   :created (quot (System/currentTimeMillis) 1000)
-   :model (:model chunk)
-   :choices [{:index 0
-             :delta {:role :assistant
-                    :content (get-in chunk [:delta :text])}
-             :finish-reason (when (:stop_reason chunk)
-                             (keyword (:stop_reason chunk)))}]})
-
-(defn handle-streaming-response
-  "Handle streaming response from Anthropic"
-  [response callback]
-  (let [body (:body response)]
-    (doseq [line (str/split-lines body)]
-      (when-let [parsed (parse-sse-line line)]
-        (let [transformed (transform-streaming-chunk parsed)]
-          (callback transformed))))))
+(defmethod core/make-streaming-request :anthropic
+  [_ transformed-request thread-pools config]
+  (let [url (str (:api-base config "https://api.anthropic.com") "/v1/messages")
+        output-ch (streaming/create-stream-channel)]
+    (go
+      (try
+        (let [response (http/post url
+                                  {:headers {"x-api-key" (:api-key config)
+                                             "anthropic-version" "2023-06-01"
+                                             "Content-Type" "application/json"
+                                             "User-Agent" "litellm-clj/1.0.0"}
+                                   :body (json/encode transformed-request)
+                                   :timeout (:timeout config 30000)
+                                   :as :stream})]
+          
+          ;; Handle errors
+          (when (>= (:status response) 400)
+            (>! output-ch (streaming/stream-error "anthropic" 
+                                                  (str "HTTP " (:status response))
+                                                  :status (:status response)))
+            (streaming/close-stream! output-ch))
+          
+          ;; Process streaming response
+          (when (= 200 (:status response))
+            (let [body (:body response)
+                  reader (java.io.BufferedReader. 
+                          (java.io.InputStreamReader. body "UTF-8"))]
+              (loop []
+                (when-let [line (.readLine reader)]
+                  (when (str/starts-with? line "data: ")
+                    (let [data (subs line 6)]
+                      (when-not (= data "[DONE]")
+                        (try
+                          (let [parsed (json/decode data true)
+                                transformed (core/transform-streaming-chunk :anthropic parsed)]
+                            (when transformed
+                              (>! output-ch transformed)))
+                          (catch Exception e
+                            (log/debug "Failed to parse SSE line" {:line line}))))))
+                  (recur)))
+              (.close reader)
+              (streaming/close-stream! output-ch))))
+        
+        (catch Exception e
+          (log/error "Error in streaming request" {:error (.getMessage e)})
+          (>! output-ch (streaming/stream-error "anthropic" (.getMessage e)))
+          (streaming/close-stream! output-ch))))
+    
+    output-ch))
 
 ;; ============================================================================
 ;; Utility Functions
