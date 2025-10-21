@@ -218,6 +218,7 @@
     ;; Use thread instead of go for blocking I/O
     (async/thread
       (try
+        (log/debug "Making Anthropic streaming request" {:url url :request transformed-request})
         (let [response (http/post url
                                   {:headers {"x-api-key" (:api-key config)
                                              "anthropic-version" "2023-06-01"
@@ -227,39 +228,64 @@
                                    :timeout (:timeout config 30000)
                                    :as :stream})]
           
-          ;; Handle errors
-          (if (>= (:status response) 400)
+          (log/debug "Received response" {:status (:status response) :headers (:headers response)})
+          
+          ;; Check if response is valid
+          (cond
+            (nil? response)
             (do
+              (log/error "Received nil response from Anthropic API")
+              (async/>!! output-ch (streaming/stream-error "anthropic" "Received nil response"))
+              (streaming/close-stream! output-ch))
+            
+            (and (:status response) (>= (:status response) 400))
+            (do
+              (log/error "HTTP error from Anthropic" {:status (:status response)})
               (async/>!! output-ch (streaming/stream-error "anthropic" 
                                                            (str "HTTP " (:status response))
                                                            :status (:status response)))
               (streaming/close-stream! output-ch))
             
             ;; Process streaming response (200 status)
-            (let [body (:body response)
-                  reader (java.io.BufferedReader. 
-                          (java.io.InputStreamReader. body "UTF-8"))]
-              (try
-                (loop []
-                  (when-let [line (.readLine reader)]
-                    (when (str/starts-with? line "data: ")
-                      (let [data (subs line 6)]
-                        (when-not (= data "[DONE]")
-                          (try
-                            (let [parsed (json/decode data true)
-                                  transformed (core/transform-streaming-chunk :anthropic parsed)]
-                              (when transformed
-                                (async/>!! output-ch transformed)))
-                            (catch Exception e
-                              (log/debug "Failed to parse SSE line" {:line line :error (.getMessage e)}))))))
-                    (recur)))
-                (finally
-                  (.close reader)
-                  (streaming/close-stream! output-ch))))))
+            :else
+            (let [body (:body response)]
+              (if (nil? body)
+                (do
+                  (log/error "Response body is nil")
+                  (async/>!! output-ch (streaming/stream-error "anthropic" "Response body is nil"))
+                  (streaming/close-stream! output-ch))
+                
+                (let [reader (java.io.BufferedReader. 
+                              (java.io.InputStreamReader. body "UTF-8"))]
+                  (try
+                    (log/debug "Starting to read SSE stream")
+                    (loop [chunk-count 0]
+                      (if-let [line (.readLine reader)]
+                        (do
+                          (when (str/starts-with? line "data: ")
+                            (let [data (subs line 6)]
+                              (when-not (= data "[DONE]")
+                                (try
+                                  (let [parsed (json/decode data true)
+                                        transformed (core/transform-streaming-chunk :anthropic parsed)]
+                                    (when transformed
+                                      (async/>!! output-ch transformed)
+                                      (log/debug "Sent chunk" {:chunk-number (inc chunk-count)})))
+                                  (catch Exception e
+                                    (log/warn "Failed to parse SSE line" {:line line :error (or (.getMessage e) (str e))}))))))
+                          (recur (inc chunk-count)))
+                        (log/debug "Stream ended" {:total-chunks chunk-count})))
+                    (finally
+                      (.close reader)
+                      (streaming/close-stream! output-ch)
+                      (log/debug "Closed reader and output channel"))))))))
         
         (catch Exception e
-          (log/error "Error in streaming request" {:error (.getMessage e) :error-class (class e)})
-          (async/>!! output-ch (streaming/stream-error "anthropic" (or (.getMessage e) (str e))))
+          (log/error "Error in streaming request" 
+                     {:error (or (.getMessage e) (str e))
+                      :error-class (class e)
+                      :stack-trace (take 5 (.getStackTrace e))})
+          (async/>!! output-ch (streaming/stream-error "anthropic" (or (.getMessage e) (str "Exception: " (class e)))))
           (streaming/close-stream! output-ch))))
     
     output-ch))
