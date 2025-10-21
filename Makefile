@@ -1,0 +1,38 @@
+.PHONY: help repl nrepl test clean build install
+
+help:
+	@echo "Available targets:"
+	@echo "  repl    - Start a Clojure REPL"
+	@echo "  nrepl   - Start an nREPL server on port 7888"
+	@echo "  test    - Run tests"
+	@echo "  clean   - Remove target directory"
+	@echo "  build   - Build the project"
+	@echo "  install - Install to local Maven repository"
+
+repl:
+	clojure -M:repl
+
+nrepl:
+	@echo "Starting nREPL server on port 7888..."
+	clojure -Sdeps '{:deps {nrepl/nrepl {:mvn/version "1.1.0"} cider/cider-nrepl {:mvn/version "0.45.0"}}}' \
+		-M -m nrepl.cmdline --middleware '["cider.nrepl/cider-middleware"]' --port 7888
+
+test:
+	clojure -M:test
+
+clean:
+	rm -rf target
+
+build:
+	clojure -T:build jar
+
+install:
+	clojure -T:build install
+
+# Streaming-specific targets
+test-streaming:
+	clojure -M test_streaming_manual.clj
+
+compile:
+	@echo "Compiling and checking syntax..."
+	clojure -M -e "(require 'litellm.core) (require 'litellm.streaming) (println \"✓ Code compiles successfully\")"
