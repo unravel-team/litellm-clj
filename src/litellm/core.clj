@@ -32,17 +32,13 @@
   (let [;; Create thread pools
         thread-pools (threadpool/create-thread-pools (:thread-pools config {}))
         
-        ;; Create providers
+        ;; In multimethod-based system, providers are just configs, not objects
         provider-configs (:providers config {})
-        providers (into {}
-                       (map (fn [[provider-name provider-config]]
-                              [provider-name (providers/create-provider provider-name provider-config)])
-                            provider-configs))
         
         ;; Create system record
         system (map->LiteLLMSystem
                  {:thread-pools thread-pools
-                  :providers providers
+                  :providers provider-configs
                   :config config})]
     
     (log/info "LiteLLM system created successfully")
@@ -76,10 +72,10 @@
 (defn add-provider!
   "Add a new provider to the system"
   [system provider-name provider-config]
-  (let [provider (providers/create-provider provider-name provider-config)]
-    (swap! (atom (:providers system)) assoc provider-name provider)
-    (log/info "Added provider" {:provider provider-name})
-    provider))
+  ;; In multimethod-based system, just add config
+  (swap! (atom (:providers system)) assoc provider-name provider-config)
+  (log/info "Added provider" {:provider provider-name})
+  provider-config)
 
 (defn remove-provider!
   "Remove a provider from the system"
@@ -236,8 +232,8 @@
   [system]
   (when system
     {:providers (into {}
-                     (map (fn [[name provider]]
-                            [name (providers/provider-status provider)])
+                     (map (fn [[name config]]
+                            [name {:name name :config config}])
                           (:providers system)))
      :thread-pools (threadpool/pool-summary (:thread-pools system))
      :config (:config system)}))
@@ -245,12 +241,12 @@
 (defn health-check
   "Perform health check on all providers"
   [system]
-  (let [providers (:providers system)
+  (let [provider-configs (:providers system)
         thread-pools (:thread-pools system)]
     (into {}
-          (map (fn [[name provider]]
-                 [name @(providers/health-check provider thread-pools)])
-               providers))))
+          (map (fn [[name config]]
+                 [name @(providers/health-check name thread-pools config)])
+               provider-configs))))
 
 ;; ============================================================================
 ;; Global System Management
@@ -288,12 +284,12 @@
 (defn test-providers
   "Test all providers in the system"
   [system]
-  (let [providers (:providers system)
+  (let [provider-configs (:providers system)
         thread-pools (:thread-pools system)]
     (into {}
-          (map (fn [[name provider]]
-                 [name (providers/test-provider provider thread-pools nil)])
-               providers))))
+          (map (fn [[name config]]
+                 [name (providers/test-provider name thread-pools nil config)])
+               provider-configs))))
 
 (defn benchmark-provider
   "Benchmark a specific provider"
