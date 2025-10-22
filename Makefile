@@ -33,7 +33,7 @@ e2e:
 	@echo "Running E2E provider tests..."
 	@echo "Testing real API calls for each provider (configure API keys as needed)"
 	@echo ""
-	clojure -M test/e2e/run_e2e_tests.clj
+	clojure -M -m e2e.run-e2e-tests
 
 clean:
 	rm -rf target .cpcache
