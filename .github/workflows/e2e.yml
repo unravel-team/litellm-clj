@@ -38,10 +38,6 @@ jobs:
       - name: Install dependencies
         run: clojure -P -M:test
       
-      - name: Verify examples can be loaded
+      - name: End to end tests
         run: make e2e
-
-      - name: Summary
-        run: |
-          echo "✅ E2E Tests Complete"
 
