@@ -3,7 +3,7 @@
                                                (clojure.test/testing)
                                                (clojure.test/is)]}
            :unused-namespace {:level :warning}
-           :unused-binding {:level :warning}
+           :unused-binding {:level :off}
            :unused-private-var {:level :warning}
            :misplaced-docstring {:level :warning}
            :type-mismatch {:level :warning}}

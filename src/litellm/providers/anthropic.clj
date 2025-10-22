@@ -6,7 +6,7 @@
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
-            [clojure.core.async :as async :refer [go >!]]
+            [clojure.core.async :as async]
             [com.climate.claypoole :as cp]))
 
 ;; ============================================================================

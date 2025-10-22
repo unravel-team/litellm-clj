@@ -26,17 +26,16 @@
   "Add reasoning system prompt for magistral models based on reasoning_effort"
   [messages reasoning-effort]
   (when reasoning-effort
-    (let [reasoning-prompt "When solving problems, think step-by-step in <think> tags before providing your final answer. Break down complex problems into smaller steps and show your reasoning process clearly."]
-      ;; Find existing system message
-      (let [system-msg (first (filter #(= "system" (:role %)) messages))
-            other-msgs (remove #(= "system" (:role %)) messages)]
-        (if system-msg
-          ;; Prepend reasoning prompt to existing system message
-          (cons (assoc system-msg :content (str reasoning-prompt "\n\n" (:content system-msg)))
-                other-msgs)
-          ;; Add new system message with reasoning prompt
-          (cons {:role "system" :content reasoning-prompt}
-                messages))))))
+    (let [reasoning-prompt "When solving problems, think step-by-step in <think> tags before providing your final answer. Break down complex problems into smaller steps and show your reasoning process clearly."
+          system-msg (first (filter #(= "system" (:role %)) messages))
+          other-msgs (remove #(= "system" (:role %)) messages)]
+      (if system-msg
+        ;; Prepend reasoning prompt to existing system message
+        (cons (assoc system-msg :content (str reasoning-prompt "\n\n" (:content system-msg)))
+              other-msgs)
+        ;; Add new system message with reasoning prompt
+        (cons {:role "system" :content reasoning-prompt}
+              messages)))))
 
 (defn transform-tools
   "Transform tools to Mistral format (OpenAI-compatible)"

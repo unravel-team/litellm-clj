@@ -1,7 +1,6 @@
 (ns litellm.core
   "Core API for LiteLLM - Direct provider calls with model names as-is"
   (:require [clojure.tools.logging :as log]
-            [litellm.schemas :as schemas]
             [litellm.providers.core :as providers]
             [litellm.providers.openai]    ; Load to register provider
             [litellm.providers.anthropic] ; Load to register provider
