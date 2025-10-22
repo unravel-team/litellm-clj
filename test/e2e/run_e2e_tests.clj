@@ -1,6 +1,7 @@
 (ns e2e.run-e2e-tests
   "E2E test runner for all providers"
-  (:require [litellm.core :as litellm]))
+  (:require [litellm.core :as litellm]
+            [clojure.core.async :as async]))
 
 (defn test-provider
   "Test a provider with the given configuration"
@@ -38,6 +39,28 @@
             (assert (some? response) "Helper function test failed")
             (assert (string? (litellm/extract-content response)) "Content extraction failed")
             (println (format "  ✓ Helper function test passed")))
+          
+          ;; Test 4: Streaming
+          (let [ch (litellm/completion provider-name model
+                                      {:messages [{:role :user :content "Count: 1"}]
+                                       :max-tokens 20
+                                       :stream true
+                                       :api-key api-key})
+                chunks (atom [])
+                timeout-ms 5000
+                start-time (System/currentTimeMillis)]
+            (assert (some? ch) "Streaming channel should not be nil")
+            ;; Collect chunks with timeout
+            (loop []
+              (when (< (- (System/currentTimeMillis) start-time) timeout-ms)
+                (when-let [chunk (async/alt!!
+                                   ch ([v] v)
+                                   (async/timeout 1000) nil)]
+                  (swap! chunks conj chunk)
+                  (recur))))
+            (assert (seq @chunks) "Should receive at least one streaming chunk")
+            (assert (every? map? @chunks) "All chunks should be maps")
+            (println (format "  ✓ Streaming test passed (%d chunks received)" (count @chunks))))
           
           (println (format "✅ %s provider tests passed!\n" provider-name))
           {:provider provider-name :status :passed}

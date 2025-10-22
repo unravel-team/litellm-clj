@@ -62,7 +62,7 @@ For each configured provider, the E2E tests verify:
 1. **Basic Completion**: Simple completion request with minimal parameters
 2. **Temperature Control**: Parameter handling (temperature, max_tokens, etc.)
 3. **Helper Functions**: The `litellm/chat` convenience function
-4. **Content Extraction**: The `litellm/extract-content` utility
+4. **Streaming**: Streaming completion requests and chunk reception
 
 ### Test Output
 
