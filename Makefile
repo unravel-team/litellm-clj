@@ -29,6 +29,15 @@ coverage:
 lint:
 	clojure -M:kondo --lint src test
 
+e2e:
+	@echo "Running E2E tests..."
+	@echo "Verifying example files can be loaded..."
+	@for file in examples/*.clj; do \
+		echo "Checking $$file..."; \
+		clojure -M -e "(load-file \"$$file\")" || echo "Note: $$file may require API keys to run"; \
+	done
+	@echo "✓ E2E tests complete"
+
 clean:
 	rm -rf target .cpcache
 

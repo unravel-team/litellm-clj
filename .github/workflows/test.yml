@@ -44,7 +44,7 @@ jobs:
         run: clojure -P -M:test
       
       - name: Run tests
-        run: clojure -M:test -m kaocha.runner
+        run: make test
       
       # Coverage generation disabled temporarily due to empty placeholder test files
       # TODO: Re-enable after adding proper test implementations
