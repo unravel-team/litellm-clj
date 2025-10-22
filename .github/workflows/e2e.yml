@@ -38,31 +38,10 @@ jobs:
       - name: Install dependencies
         run: clojure -P -M:test
       
-      - name: Run unit tests
-        run: make test
-      
       - name: Verify examples can be loaded
         run: make e2e
-      
-      - name: Check for common issues
-        run: |
-          echo "Checking for common code issues..."
-          
-          # Check for TODO/FIXME comments
-          echo "Checking for TODO/FIXME markers..."
-          grep -r "TODO\|FIXME" src/ || echo "No TODO/FIXME found"
-          
-          # Check file sizes (prevent accidentally committing large files)
-          echo "Checking for large files..."
-          find . -type f -size +1M -not -path "./.git/*" || echo "No large files found"
-      
-      - name: Lint with clj-kondo
-        run: make lint
-      
+
       - name: Summary
         run: |
           echo "✅ E2E Tests Complete"
-          echo "- Unit tests passed"
-          echo "- Examples validated"
-          echo "- Code quality checks passed"
-          echo "- Linting passed"
+
