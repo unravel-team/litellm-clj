@@ -38,6 +38,7 @@ The E2E tests require API keys to be set as environment variables:
 | Anthropic  | `ANTHROPIC_API_KEY`    | https://console.anthropic.com/            |
 | Gemini     | `GEMINI_API_KEY`       | https://makersuite.google.com/app/apikey |
 | Mistral    | `MISTRAL_API_KEY`      | https://console.mistral.ai/               |
+| OpenRouter | `OPENROUTER_API_KEY`   | https://openrouter.ai/keys                |
 | Ollama     | (no key required)      | https://ollama.ai/ (local server)        |
 
 ### Setting API Keys
@@ -49,6 +50,7 @@ export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
 export GEMINI_API_KEY="..."
 export MISTRAL_API_KEY="..."
+export OPENROUTER_API_KEY="sk-or-..."
 ```
 
 **For GitHub Actions:**
@@ -113,6 +115,7 @@ The tests are designed to be cost-effective:
 - Anthropic (claude-3-haiku): ~$0.001 per test run
 - Gemini (gemini-1.5-flash): Free tier available
 - Mistral (mistral-small): ~$0.001 per test run
+- OpenRouter (openai/gpt-3.5-turbo): ~$0.001 per test run
 - Ollama: Free (local)
 
 ## CI/CD Integration
