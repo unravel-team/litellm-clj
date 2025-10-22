@@ -12,17 +12,11 @@
   "Register a provider configuration with a keyword name.
   
   Configuration can be:
-  - Simple: {:provider :openai :model \"gpt-4\" :config {...}}
-  - With router: {:router (fn [request] {...}) :configs {:openai {...} :anthropic {...}}}
+  - Simple: {:provider :openai :model \\\"gpt-4\\\" :config {...}}
+  - With router: {:router router-fn :configs {...}}
   
-  Examples:
-    (register! :fast {:provider :openai :model \"gpt-4o-mini\" :config {:api-key \"..."}})
-    
-    (register! :smart {:router (fn [req] 
-                                 (if (> (count (:messages req)) 10)
-                                   {:provider :anthropic :model \"claude-3-opus\"}
-                                   {:provider :openai :model \"gpt-4o-mini\"}))
-                       :configs {:openai {...} :anthropic {...}}})"
+  Example:
+    (register! :fast {:provider :openai :model \\\"gpt-4o-mini\\\" :config {:api-key \\\"...\\\"}})"
   [config-name config-map]
   (config/register! config-name config-map))
 
