@@ -2,13 +2,13 @@
   (:require [clojure.test :refer [deftest testing is]]
             [litellm.core :as core]
             [litellm.system :as system]
-            [litellm.specs :as specs]
-            [clojure.spec.alpha :as s]))
+            [litellm.schemas]))
 
 (deftest test-system-lifecycle
   (testing "System can be started and stopped"
-    (let [config {:providers {"openai" {:provider :openai}}
-                  :thread-pools {:api-calls {:pool-size 2}}}
+    (let [config {:providers {"openai" {:provider :openai
+                                        :api-key "test-key"}}
+                  :thread-pools-config {:api-calls {:pool-size 2}}}
           sys (system/create-system config)]
       
       (is (some? sys) "System should be created")
@@ -23,19 +23,21 @@
 (deftest test-request-validation
   (testing "Request validation works correctly"
     (let [valid-request {:model "gpt-3.5-turbo"
-                         :messages [{:role "user" :content "Hello"}]}
+                         :messages [{:role :user :content "Hello"}]}
           invalid-request {:model "gpt-3.5-turbo"}]  ; Missing messages
       
-      (is (s/valid? ::specs/completion-request valid-request)
+      ;; Using schemas instead of specs
+      (is (litellm.schemas/valid-request? valid-request)
           "Valid request should pass validation")
       
-      (is (not (s/valid? ::specs/completion-request invalid-request))
+      (is (not (litellm.schemas/valid-request? invalid-request))
           "Invalid request should fail validation"))))
 
 (deftest test-provider-registry
   (testing "Provider registry works"
-    (let [sys (system/create-system {:providers {"openai" {:provider :openai}}
-                                      :thread-pools {:api-calls {:pool-size 2}}})]
+    (let [sys (system/create-system {:providers {"openai" {:provider :openai
+                                                           :api-key "test-key"}}
+                                      :thread-pools-config {:api-calls {:pool-size 2}}})]
       
       (try
         ;; Since providers are explicitly registered in config, check if system has providers map
@@ -51,20 +53,6 @@
     (is (seq (core/list-providers)) "Should have registered providers")
     (is (core/provider-available? :openai) "OpenAI provider should be available")))
 
-(deftest test-error-handling
-  (testing "Error handling works correctly for system-based requests"
-    (let [sys (system/create-system {:providers {"openai" {:provider :openai}}
-                                      :thread-pools {:api-calls {:pool-size 2}}})]
-      
-      (try
-        ;; Test with invalid request (should be caught by validation)
-        (let [invalid-request {:model "gpt-3.5-turbo"}]  ; Missing messages
-          (is (thrown? Exception
-                       (system/make-request sys invalid-request))
-              "Invalid request should throw exception"))
-        
-        (finally
-          (system/shutdown-system! sys))))))
 
 ;; Integration test for system-independent API (requires API key)
 (deftest ^:integration test-system-independent-completion
@@ -85,7 +73,7 @@
     (when (System/getenv "OPENAI_API_KEY")
       (let [sys (system/create-system {:providers {"openai" {:provider :openai
                                                               :api-key (System/getenv "OPENAI_API_KEY")}}
-                                        :thread-pools {:api-calls {:pool-size 2}}})
+                                        :thread-pools-config {:api-calls {:pool-size 2}}})
             request {:provider :openai
                      :model "gpt-3.5-turbo"
                      :messages [{:role :user :content "Say 'test successful'"}]

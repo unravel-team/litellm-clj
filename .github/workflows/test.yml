@@ -1,0 +1,59 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test on JDK ${{ matrix.java }}
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        java: ['11', '17', '21']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ matrix.java }}
+      
+      - name: Install Clojure tools
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          cli: 1.11.1.1413
+      
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: ${{ runner.os }}-clojure-${{ hashFiles('**/deps.edn') }}
+          restore-keys: |
+            ${{ runner.os }}-clojure-
+      
+      - name: Install dependencies
+        run: clojure -P -M:test
+      
+      - name: Run tests
+        run: clojure -M:test -m kaocha.runner
+      
+      - name: Generate coverage report (JDK 17 only)
+        if: matrix.java == '17'
+        run: clojure -M:test:coverage
+      
+      - name: Upload coverage to Codecov (JDK 17 only)
+        if: matrix.java == '17'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./target/coverage/codecov.json
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}

@@ -44,9 +44,10 @@
   (testing "Parse valid SSE line"
     (let [parsed (streaming/parse-sse-line 
                    "data: {\"test\":\"value\"}" 
-                   #(cheshire.core/decode % true))]
-      (is (some? parsed))))
+                   cheshire.core/decode)]
+      (is (some? parsed))
+      (is (= {:test "value"} parsed))))
   
   (testing "Skip [DONE] marker"
-    (let [parsed (streaming/parse-sse-line "data: [DONE]" identity)]
+    (let [parsed (streaming/parse-sse-line "data: [DONE]" cheshire.core/decode)]
       (is (nil? parsed)))))

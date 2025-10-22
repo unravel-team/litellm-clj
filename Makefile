@@ -18,10 +18,19 @@ nrepl:
 		-M -m nrepl.cmdline --middleware '["cider.nrepl/cider-middleware"]' --port 7888
 
 test:
-	clojure -M:test
+	clojure -M:test -m kaocha.runner
+
+test-ci:
+	clojure -M:test -m kaocha.runner --reporter kaocha.report/documentation
+
+coverage:
+	clojure -M:test:coverage
+
+lint:
+	clojure -M:kondo --lint src test
 
 clean:
-	rm -rf target
+	rm -rf target .cpcache
 
 build:
 	clojure -T:build jar
