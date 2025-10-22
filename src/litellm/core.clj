@@ -107,9 +107,10 @@
        (let [transformed-request (providers/transform-request provider-name request config)]
          (providers/make-streaming-request provider-name transformed-request @minimal-thread-pools config))
        
-       ;; Non-streaming request
+       ;; Non-streaming request - use the provider's make-request
        (let [transformed-request (providers/transform-request provider-name request config)
-             response (make-sync-http-request provider-name transformed-request)]
+             response-future (providers/make-request provider-name transformed-request @minimal-thread-pools nil config)
+             response @response-future]  ; Block and wait for response
          
          ;; Transform response
          (providers/transform-response provider-name response))))))
