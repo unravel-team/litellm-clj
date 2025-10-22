@@ -154,11 +154,12 @@
    "gpt-3.5-turbo" "gpt-3.5-turbo"})
 
 ;; ============================================================================
-;; OpenAI Provider Multimethod Implementations
+;; OpenAI Provider Implementation Functions
 ;; ============================================================================
 
-(defmethod core/transform-request :openai
-  [_ request config]
+(defn transform-request-impl
+  "OpenAI-specific transform-request implementation"
+  [provider-name request config]
   (let [model (:model request)
         transformed {:model model
                     :messages (transform-messages (:messages request))
@@ -177,8 +178,9 @@
       (:functions request) (assoc :functions (transform-functions (:functions request)))
       (:function-call request) (assoc :function_call (transform-function-call (:function-call request))))))
 
-(defmethod core/make-request :openai
-  [_ transformed-request thread-pools telemetry config]
+(defn make-request-impl
+  "OpenAI-specific make-request implementation"
+  [provider-name transformed-request thread-pools telemetry config]
   (let [url (str (:api-base config "https://api.openai.com/v1") "/chat/completions")]
     (cp/future (:api-calls thread-pools)
       (let [start-time (System/currentTimeMillis)
@@ -197,8 +199,9 @@
         
         response))))
 
-(defmethod core/transform-response :openai
-  [_ response]
+(defn transform-response-impl
+  "OpenAI-specific transform-response implementation"
+  [provider-name response]
   (let [body (:body response)]
     {:id (:id body)
      :object (:object body)
@@ -207,16 +210,25 @@
      :choices (map transform-choice (:choices body))
      :usage (transform-usage (:usage body))}))
 
-(defmethod core/supports-streaming? :openai [_] true)
+(defn supports-streaming-impl
+  "OpenAI-specific supports-streaming? implementation"
+  [provider-name]
+  true)
 
-(defmethod core/supports-function-calling? :openai [_] true)
+(defn supports-function-calling-impl
+  "OpenAI-specific supports-function-calling? implementation"
+  [provider-name]
+  true)
 
-(defmethod core/get-rate-limits :openai [_]
+(defn get-rate-limits-impl
+  "OpenAI-specific get-rate-limits implementation"
+  [provider-name]
   {:requests-per-minute 3500
    :tokens-per-minute 90000})
 
-(defmethod core/health-check :openai
-  [_ thread-pools config]
+(defn health-check-impl
+  "OpenAI-specific health-check implementation"
+  [provider-name thread-pools config]
   (cp/future (:health-checks thread-pools)
     (try
       (let [response (http/get (str (:api-base config "https://api.openai.com/v1") "/models")
@@ -227,16 +239,18 @@
         (log/warn "OpenAI health check failed" {:error (.getMessage e)})
         false))))
 
-(defmethod core/get-cost-per-token :openai
-  [_ model]
+(defn get-cost-per-token-impl
+  "OpenAI-specific get-cost-per-token implementation"
+  [provider-name model]
   (get default-cost-map model {:input 0.0 :output 0.0}))
 
 ;; ============================================================================
 ;; Streaming Support
 ;; ============================================================================
 
-(defmethod core/transform-streaming-chunk :openai
-  [_ chunk]
+(defn transform-streaming-chunk-impl
+  "OpenAI-specific transform-streaming-chunk implementation"
+  [provider-name chunk]
   (let [choice (first (:choices chunk))
         delta (:delta choice)]
     {:id (:id chunk)
@@ -249,8 +263,9 @@
                :finish-reason (when (:finish_reason choice)
                                (keyword (:finish_reason choice)))}]}))
 
-(defmethod core/make-streaming-request :openai
-  [_ transformed-request thread-pools config]
+(defn make-streaming-request-impl
+  "OpenAI-specific make-streaming-request implementation"
+  [provider-name transformed-request thread-pools config]
   (let [url (str (:api-base config "https://api.openai.com/v1") "/chat/completions")
         output-ch (streaming/create-stream-channel)]
     (go

@@ -159,11 +159,12 @@
   (contains? magistral-models model))
 
 ;; ============================================================================
-;; Mistral Provider Multimethod Implementations
+;; Mistral Provider Implementation Functions
 ;; ============================================================================
 
-(defmethod core/transform-request :mistral
-  [_ request config]
+(defn transform-request-impl
+  "Mistral-specific transform-request implementation"
+  [provider-name request config]
   (let [model (:model request)
         reasoning-effort (:reasoning-effort request)
         messages (:messages request)
@@ -186,8 +187,9 @@
       (:tools request) (assoc :tools (transform-tools (:tools request)))
       (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request))))))
 
-(defmethod core/make-request :mistral
-  [_ transformed-request thread-pools telemetry config]
+(defn make-request-impl
+  "Mistral-specific make-request implementation"
+  [provider-name transformed-request thread-pools telemetry config]
   (let [url (str (:api-base config "https://api.mistral.ai/v1") "/chat/completions")]
     (cp/future (:api-calls thread-pools)
       (let [start-time (System/currentTimeMillis)
@@ -206,8 +208,9 @@
         
         response))))
 
-(defmethod core/transform-response :mistral
-  [_ response]
+(defn transform-response-impl
+  "Mistral-specific transform-response implementation"
+  [provider-name response]
   (let [body (:body response)]
     {:id (:id body)
      :object (:object body)
@@ -216,16 +219,25 @@
      :choices (map transform-choice (:choices body))
      :usage (transform-usage (:usage body))}))
 
-(defmethod core/supports-streaming? :mistral [_] true)
+(defn supports-streaming-impl
+  "Mistral-specific supports-streaming? implementation"
+  [provider-name]
+  true)
 
-(defmethod core/supports-function-calling? :mistral [_] true)
+(defn supports-function-calling-impl
+  "Mistral-specific supports-function-calling? implementation"
+  [provider-name]
+  true)
 
-(defmethod core/get-rate-limits :mistral [_]
+(defn get-rate-limits-impl
+  "Mistral-specific get-rate-limits implementation"
+  [provider-name]
   {:requests-per-minute 1000
    :tokens-per-minute 1000000})
 
-(defmethod core/health-check :mistral
-  [_ thread-pools config]
+(defn health-check-impl
+  "Mistral-specific health-check implementation"
+  [provider-name thread-pools config]
   (cp/future (:health-checks thread-pools)
     (try
       (let [response (http/get (str (:api-base config "https://api.mistral.ai/v1") "/models")
@@ -236,8 +248,9 @@
         (log/warn "Mistral health check failed" {:error (.getMessage e)})
         false))))
 
-(defmethod core/get-cost-per-token :mistral
-  [_ model]
+(defn get-cost-per-token-impl
+  "Mistral-specific get-cost-per-token implementation"
+  [provider-name model]
   (get default-cost-map model {:input 0.0 :output 0.0}))
 
 ;; ============================================================================

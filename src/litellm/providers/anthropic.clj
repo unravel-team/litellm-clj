@@ -111,11 +111,12 @@
    "claude-instant-1.2" "claude-instant-1.2"})
 
 ;; ============================================================================
-;; Anthropic Provider Multimethod Implementations
+;; Anthropic Provider Implementation Functions
 ;; ============================================================================
 
-(defmethod core/transform-request :anthropic
-  [_ request config]
+(defn transform-request-impl
+  "Anthropic-specific transform-request implementation"
+  [provider-name request config]
   (let [model (core/extract-model-name (:model request))
         mapped-model (get (:model-mapping config default-model-mapping) model model)
         messages-data (transform-messages (:messages request))
@@ -130,8 +131,9 @@
       (:system messages-data) (assoc :system (:system messages-data))
       (:messages messages-data) (assoc :messages (:messages messages-data)))))
 
-(defmethod core/make-request :anthropic
-  [_ transformed-request thread-pools telemetry config]
+(defn make-request-impl
+  "Anthropic-specific make-request implementation"
+  [provider-name transformed-request thread-pools telemetry config]
   (let [url (str (:api-base config "https://api.anthropic.com") "/v1/messages")]
     (cp/future (:api-calls thread-pools)
       (let [start-time (System/currentTimeMillis)
@@ -151,8 +153,9 @@
         
         response))))
 
-(defmethod core/transform-response :anthropic
-  [_ response]
+(defn transform-response-impl
+  "Anthropic-specific transform-response implementation"
+  [provider-name response]
   (let [body (:body response)]
     {:id (:id body)
      :object "chat.completion"
@@ -161,16 +164,25 @@
      :choices [(transform-choice body 0)]
      :usage (transform-usage (:usage body))}))
 
-(defmethod core/supports-streaming? :anthropic [_] true)
+(defn supports-streaming-impl
+  "Anthropic-specific supports-streaming? implementation"
+  [provider-name]
+  true)
 
-(defmethod core/supports-function-calling? :anthropic [_] false)
+(defn supports-function-calling-impl
+  "Anthropic-specific supports-function-calling? implementation"
+  [provider-name]
+  false)
 
-(defmethod core/get-rate-limits :anthropic [_]
+(defn get-rate-limits-impl
+  "Anthropic-specific get-rate-limits implementation"
+  [provider-name]
   {:requests-per-minute 240
    :tokens-per-minute 60000})
 
-(defmethod core/health-check :anthropic
-  [_ thread-pools config]
+(defn health-check-impl
+  "Anthropic-specific health-check implementation"
+  [provider-name thread-pools config]
   (cp/future (:health-checks thread-pools)
     (try
       (let [response (http/get (str (:api-base config "https://api.anthropic.com") "/v1/models")
@@ -182,16 +194,18 @@
         (log/warn "Anthropic health check failed" {:error (.getMessage e)})
         false))))
 
-(defmethod core/get-cost-per-token :anthropic
-  [_ model]
+(defn get-cost-per-token-impl
+  "Anthropic-specific get-cost-per-token implementation"
+  [provider-name model]
   (get default-cost-map model {:input 0.0 :output 0.0}))
 
 ;; ============================================================================
 ;; Streaming Support
 ;; ============================================================================
 
-(defmethod core/transform-streaming-chunk :anthropic
-  [_ chunk]
+(defn transform-streaming-chunk-impl
+  "Anthropic-specific transform-streaming-chunk implementation"
+  [provider-name chunk]
   (let [event-type (:type chunk)]
     (case event-type
       "content_block_delta" {:id (:message_id chunk)
@@ -211,8 +225,9 @@
                                :finish-reason :stop}]}
       nil)))
 
-(defmethod core/make-streaming-request :anthropic
-  [_ transformed-request thread-pools config]
+(defn make-streaming-request-impl
+  "Anthropic-specific make-streaming-request implementation"
+  [provider-name transformed-request thread-pools config]
   (let [url (str (:api-base config "https://api.anthropic.com") "/v1/messages")
         output-ch (streaming/create-stream-channel)]
     ;; Use thread instead of go for blocking I/O
