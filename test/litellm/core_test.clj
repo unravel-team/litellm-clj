@@ -60,12 +60,11 @@
     (when (System/getenv "OPENAI_API_KEY")
       (let [request {:messages [{:role :user :content "Say 'test successful'"}]
                      :max-tokens 10}
-            config {:api-key (System/getenv "OPENAI_API_KEY")}]
-        
-        (let [response (core/completion :openai "gpt-3.5-turbo" request config)]
-          (is (map? response) "Response should be a map")
-          (is (contains? response :choices) "Response should have choices")
-          (is (seq (:choices response)) "Choices should not be empty"))))))
+            config {:api-key (System/getenv "OPENAI_API_KEY")}
+            response (core/completion :openai "gpt-3.5-turbo" request config)]
+        (is (map? response) "Response should be a map")
+        (is (contains? response :choices) "Response should have choices")
+        (is (seq (:choices response)) "Choices should not be empty")))))
 
 ;; Integration test for system-based API (requires API key)
 (deftest ^:integration test-system-based-completion

@@ -1,7 +1,8 @@
 (ns litellm.streaming-test
-  (:require [clojure.test :refer :all]
-            [clojure.core.async :as async :refer [chan go >! <!! close!]]
-            [litellm.streaming :as streaming]))
+  (:require [clojure.test :refer [deftest is testing]]
+            [clojure.core.async :as async :refer [chan go >! close!]]
+            [litellm.streaming :as streaming]
+            [cheshire.core]))
 
 ;; ============================================================================
 ;; Basic Tests

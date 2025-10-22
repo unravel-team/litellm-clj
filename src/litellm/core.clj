@@ -5,9 +5,7 @@
             [litellm.providers.openai]    ; Load to register provider
             [litellm.providers.anthropic] ; Load to register provider
             [litellm.providers.openrouter] ; Load to register provider
-            [litellm.threadpool :as threadpool]
-            [hato.client :as http]
-            [cheshire.core :as json]))
+            [litellm.threadpool :as threadpool]))
 
 ;; ============================================================================
 ;; Provider Discovery
@@ -27,34 +25,6 @@
   "Get information about a provider"
   [provider-name]
   (providers/provider-status provider-name))
-
-;; ============================================================================
-;; Direct HTTP Request Helpers
-;; ============================================================================
-
-(defn- make-sync-http-request
-  "Make a synchronous HTTP request without thread pools"
-  [provider-name transformed-request]
-  (let [url (:url transformed-request)
-        headers (:headers transformed-request)
-        body (:body transformed-request)]
-    (try
-      (let [response (http/post url
-                               {:headers headers
-                                :body (json/generate-string body)
-                                :as :json
-                                :throw-exceptions? false})]
-        (if (< (:status response) 400)
-          (:body response)
-          (throw (ex-info "API request failed"
-                         {:status (:status response)
-                          :body (:body response)
-                          :provider provider-name}))))
-      (catch Exception e
-        (throw (ex-info "HTTP request failed"
-                       {:provider provider-name
-                        :error (.getMessage e)}
-                       e))))))
 
 (def ^:private minimal-thread-pools
   "Minimal thread pools for streaming support in core"

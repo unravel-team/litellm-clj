@@ -5,7 +5,6 @@
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
-            [clojure.string :as str]
             [clojure.core.async :as async :refer [go >!]]
             [com.climate.claypoole :as cp]))
 

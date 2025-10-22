@@ -9,47 +9,47 @@
 (deftest test-transform-messages
   (testing "Transform messages to OpenAI format"
     (let [messages [{:role :user :content "Hello"}
-                   {:role :assistant :content "Hi there"}]]
-      (let [transformed (openai/transform-messages messages)]
-        (is (= 2 (count transformed)))
-        (is (= "user" (:role (first transformed))))
-        (is (= "Hello" (:content (first transformed))))))))
+                   {:role :assistant :content "Hi there"}]
+          transformed (openai/transform-messages messages)]
+      (is (= 2 (count transformed)))
+      (is (= "user" (:role (first transformed))))
+      (is (= "Hello" (:content (first transformed)))))))
 
 (deftest test-transform-tools
   (testing "Transform tools to OpenAI format"
     (let [tools [{:function {:name "get_weather"
-                            :description "Get weather"}}]]
-      (let [transformed (openai/transform-tools tools)]
-        (is (= 1 (count transformed)))
-        (is (= "get_weather" (get-in (first transformed) [:function :name])))))))
+                            :description "Get weather"}}]
+          transformed (openai/transform-tools tools)]
+      (is (= 1 (count transformed)))
+      (is (= "get_weather" (get-in (first transformed) [:function :name]))))))
 
 (deftest test-transform-message
   (testing "Transform OpenAI message to standard format"
-    (let [message {:role "assistant" :content "Hello"}]
-      (let [transformed (openai/transform-message message)]
-        (is (= :assistant (:role transformed)))
-        (is (= "Hello" (:content transformed)))))))
+    (let [message {:role "assistant" :content "Hello"}
+          transformed (openai/transform-message message)]
+      (is (= :assistant (:role transformed)))
+      (is (= "Hello" (:content transformed))))))
 
 (deftest test-transform-usage
   (testing "Transform usage information"
     (let [usage {:prompt_tokens 10
                 :completion_tokens 20
-                :total_tokens 30}]
-      (let [transformed (openai/transform-usage usage)]
-        (is (= 10 (:prompt-tokens transformed)))
-        (is (= 20 (:completion-tokens transformed)))
-        (is (= 30 (:total-tokens transformed)))))))
+                :total_tokens 30}
+          transformed (openai/transform-usage usage)]
+      (is (= 10 (:prompt-tokens transformed)))
+      (is (= 20 (:completion-tokens transformed)))
+      (is (= 30 (:total-tokens transformed))))))
 
 (deftest test-transform-request-basic
   (testing "Transform basic request"
     (let [request {:model "gpt-4"
                   :messages [{:role :user :content "Hello"}]
                   :max-tokens 100}
-          config {}]
-      (let [transformed (openai/transform-request-impl :openai request config)]
-        (is (= "gpt-4" (:model transformed)))
-        (is (= 100 (:max_tokens transformed)))
-        (is (= 1 (count (:messages transformed))))))))
+          config {}
+          transformed (openai/transform-request-impl :openai request config)]
+      (is (= "gpt-4" (:model transformed)))
+      (is (= 100 (:max_tokens transformed)))
+      (is (= 1 (count (:messages transformed)))))))
 
 (deftest test-get-cost-per-token
   (testing "Get cost for known model"

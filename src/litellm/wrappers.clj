@@ -142,20 +142,23 @@
                             (catch Exception e
                               (deliver result-promise
                                       {:success false
-                                       :error e}))))]
+                                       :error e}))))
+          result (deref result-promise timeout-ms ::timeout)]
       
       ;; Wait for result with timeout
-      (let [result (deref result-promise timeout-ms ::timeout)]
-        (if (= result ::timeout)
-          (do
-            (future-cancel result-future)
-            (throw (ex-info "Request timed out"
-                            {:timeout-ms timeout-ms
-                             :config-name config-name})))
-          
-          (if (:success result)
-            (:result result)
-            (throw (:error result))))))))
+      (cond
+        (= result ::timeout)
+        (do
+          (future-cancel result-future)
+          (throw (ex-info "Request timed out"
+                          {:timeout-ms timeout-ms
+                           :config-name config-name})))
+        
+        (:success result)
+        (:result result)
+        
+        :else
+        (throw (:error result))))))
 
 ;; ============================================================================
 ;; Cost Tracking Support

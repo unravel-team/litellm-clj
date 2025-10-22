@@ -1,8 +1,7 @@
 (ns litellm.threadpool
   "Thread pool management using Claypoole for controlled concurrency"
   (:require [com.climate.claypoole :as cp]
-            [clojure.tools.logging :as log]
-            [litellm.schemas :as schemas]))
+            [clojure.tools.logging :as log]))
 
 ;; ============================================================================
 ;; Thread Pool Record
@@ -20,7 +19,8 @@
   [pools]
   (into {}
         (map (fn [[name pool]]
-               [name (when pool #_(cp/pool-stats pool))])
+               [name (when pool
+                       nil)])
              pools)))
 
 ;; ============================================================================

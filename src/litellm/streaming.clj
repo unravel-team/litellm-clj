@@ -1,6 +1,7 @@
 (ns litellm.streaming
   "Core streaming utilities for LiteLLM"
   (:require [clojure.core.async :as async :refer [chan close! go-loop <! >!]]
+            [clojure.string :as str]
             [clojure.tools.logging :as log]))
 
 ;; ============================================================================
@@ -189,7 +190,7 @@
   
   Returns parsed JSON map or nil."
   [line json-decoder]
-  (when (clojure.string/starts-with? line "data: ")
+  (when (str/starts-with? line "data: ")
     (let [data (subs line 6)]
       (when-not (= data "[DONE]")
         (try
