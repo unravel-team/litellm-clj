@@ -232,7 +232,7 @@
 (defn list-available-providers
   "List all available providers by checking multimethod implementations"
   []
-  (-> transform-request methods keys (disj :default) set))
+  (-> transform-request methods keys set (disj :default)))
 
 (defn provider-available?
   "Check if a provider is available (has multimethod implementations)"

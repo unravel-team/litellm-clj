@@ -1,9 +1,4 @@
-#!/usr/bin/env bb
-;; Manual test script for streaming functionality
-;; Run with: clojure -M test_streaming_manual.clj
-;; Or: bb test_streaming_manual.clj
-
-(require '[litellm.core :as llm]
+(require '[litellm.core :as core]
          '[litellm.streaming :as streaming]
          '[clojure.core.async :refer [go-loop <!]])
 
@@ -19,12 +14,11 @@
   (try
     (let [api-key (or (System/getenv "OPENAI_API_KEY")
                       (throw (Exception. "OPENAI_API_KEY not set")))
-          ch (llm/completion 
-               :model "openai/gpt-4o-mini"
-               :messages [{:role :user :content "Count from 1 to 5, one number per line"}]
-               :stream true
-               :api-key api-key
-               :max-tokens 50)]
+          ch (core/completion :openai "gpt-4o-mini"
+               {:messages [{:role :user :content "Count from 1 to 5, one number per line"}]
+                :stream true
+                :max-tokens 50}
+               {:api-key api-key})]
       
       (print "Response: ")
       (flush)
@@ -60,12 +54,11 @@
   (try
     (let [api-key (or (System/getenv "OPENAI_API_KEY")
                       (throw (Exception. "OPENAI_API_KEY not set")))
-          ch (llm/completion 
-               :model "openai/gpt-4o-mini"
-               :messages [{:role :user :content "Say 'Hello World'"}]
-               :stream true
-               :api-key api-key
-               :max-tokens 20)
+          ch (core/completion :openai "gpt-4o-mini"
+               {:messages [{:role :user :content "Say 'Hello World'"}]
+                :stream true
+                :max-tokens 20}
+               {:api-key api-key})
           chunks-received (atom 0)]
       
       (print "Response: ")
@@ -105,12 +98,11 @@
   (try
     (let [api-key (or (System/getenv "OPENAI_API_KEY")
                       (throw (Exception. "OPENAI_API_KEY not set")))
-          ch (llm/completion 
-               :model "openai/gpt-4o-mini"
-               :messages [{:role :user :content "Say 'Testing 123'"}]
-               :stream true
-               :api-key api-key
-               :max-tokens 20)]
+          ch (core/completion :openai "gpt-4o-mini"
+               {:messages [{:role :user :content "Say 'Testing 123'"}]
+                :stream true
+                :max-tokens 20}
+               {:api-key api-key})]
       
       (println "Collecting stream...")
       (let [result (streaming/collect-stream ch)]
@@ -136,12 +128,11 @@
   (println "----------------------------------------")
   (if-let [api-key (System/getenv "ANTHROPIC_API_KEY")]
     (try
-      (let [ch (llm/completion 
-                 :model "anthropic/claude-3-haiku"
-                 :messages [{:role :user :content "Say 'Anthropic works'"}]
-                 :stream true
-                 :api-key api-key
-                 :max-tokens 20)]
+      (let [ch (core/completion :anthropic "claude-3-haiku-20240307"
+                 {:messages [{:role :user :content "Say 'Anthropic works'"}]
+                  :stream true
+                  :max-tokens 20}
+                 {:api-key api-key})]
         
         (print "Response: ")
         (flush)
@@ -159,6 +150,7 @@
         (println "Test 4: ✓ PASSED\n"))
       
       (catch Exception e
+        (print e)
         (println "Test 4: ❌ FAILED -" (.getMessage e))
         (println)))
     (do

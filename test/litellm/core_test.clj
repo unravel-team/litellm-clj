@@ -1,6 +1,7 @@
 (ns litellm.core-test
   (:require [clojure.test :refer [deftest testing is]]
-            [litellm.core :as litellm]
+            [litellm.core :as core]
+            [litellm.system :as system]
             [litellm.specs :as specs]
             [clojure.spec.alpha :as s]))
 
@@ -8,15 +9,15 @@
   (testing "System can be started and stopped"
     (let [config {:providers {"openai" {:provider :openai}}
                   :thread-pools {:api-calls {:pool-size 2}}}
-          system (litellm/create-system config)]
+          sys (system/create-system config)]
       
-      (is (some? system) "System should be created")
-      (is (contains? system :thread-pools) "System should have thread pools")
-      (is (contains? system :config) "System should have config")
-      (is (contains? system :providers) "System should have providers")
+      (is (some? sys) "System should be created")
+      (is (contains? sys :thread-pools) "System should have thread pools")
+      (is (contains? sys :config) "System should have config")
+      (is (contains? sys :providers) "System should have providers")
       
       ;; Stop the system
-      (litellm/shutdown-system! system)
+      (system/shutdown-system! sys)
       (is true "System should stop without errors"))))
 
 (deftest test-request-validation
@@ -33,55 +34,68 @@
 
 (deftest test-provider-registry
   (testing "Provider registry works"
-    (let [system (litellm/create-system {:providers {"openai" {:provider :openai}}
-                                          :thread-pools {:api-calls {:pool-size 2}}})]
+    (let [sys (system/create-system {:providers {"openai" {:provider :openai}}
+                                      :thread-pools {:api-calls {:pool-size 2}}})]
       
       (try
         ;; Since providers are explicitly registered in config, check if system has providers map
-        (is (map? (:providers system))
+        (is (map? (:providers sys))
             "Providers should be a map")
         
         (finally
-          (litellm/shutdown-system! system))))))
+          (system/shutdown-system! sys))))))
 
-(deftest test-model-to-provider-mapping
-  (testing "Model to provider mapping works"
-    (is (= "openai" (litellm.providers.core/extract-provider-name "gpt-3.5-turbo")))
-    (is (= "openai" (litellm.providers.core/extract-provider-name "gpt-4")))
-    (is (= "anthropic" (litellm.providers.core/extract-provider-name "claude-3-opus-20240229")))
-    (is (= "openrouter" (litellm.providers.core/extract-provider-name "openai/gpt-4")))))
+
+(deftest test-provider-discovery
+  (testing "Provider discovery works"
+    (is (seq (core/list-providers)) "Should have registered providers")
+    (is (core/provider-available? :openai) "OpenAI provider should be available")))
 
 (deftest test-error-handling
-  (testing "Error handling works correctly"
-    (let [system (litellm/create-system {:providers {"openai" {:provider :openai}}
-                                          :thread-pools {:api-calls {:pool-size 2}}})]
+  (testing "Error handling works correctly for system-based requests"
+    (let [sys (system/create-system {:providers {"openai" {:provider :openai}}
+                                      :thread-pools {:api-calls {:pool-size 2}}})]
       
       (try
         ;; Test with invalid request (should be caught by validation)
         (let [invalid-request {:model "gpt-3.5-turbo"}]  ; Missing messages
           (is (thrown? Exception
-                       (litellm/make-request system invalid-request))
+                       (system/make-request sys invalid-request))
               "Invalid request should throw exception"))
         
         (finally
-          (litellm/shutdown-system! system))))))
+          (system/shutdown-system! sys))))))
 
-;; Integration test (requires API key)
-(deftest ^:integration test-actual-api-call
-  (testing "Actual API call works (requires OPENAI_API_KEY)"
+;; Integration test for system-independent API (requires API key)
+(deftest ^:integration test-system-independent-completion
+  (testing "System-independent completion works (requires OPENAI_API_KEY)"
     (when (System/getenv "OPENAI_API_KEY")
-      (let [system (litellm/create-system {:providers {"openai" {:provider :openai
-                                                                  :api-key (System/getenv "OPENAI_API_KEY")}}
-                                            :thread-pools {:api-calls {:pool-size 2}}})
-            request {:model "gpt-3.5-turbo"
-                     :messages [{:role "user" :content "Say 'test successful'"}]
-                     :max_tokens 10}]
+      (let [request {:messages [{:role :user :content "Say 'test successful'"}]
+                     :max-tokens 10}
+            config {:api-key (System/getenv "OPENAI_API_KEY")}]
+        
+        (let [response (core/completion :openai "gpt-3.5-turbo" request config)]
+          (is (map? response) "Response should be a map")
+          (is (contains? response :choices) "Response should have choices")
+          (is (seq (:choices response)) "Choices should not be empty"))))))
+
+;; Integration test for system-based API (requires API key)
+(deftest ^:integration test-system-based-completion
+  (testing "System-based completion works (requires OPENAI_API_KEY)"
+    (when (System/getenv "OPENAI_API_KEY")
+      (let [sys (system/create-system {:providers {"openai" {:provider :openai
+                                                              :api-key (System/getenv "OPENAI_API_KEY")}}
+                                        :thread-pools {:api-calls {:pool-size 2}}})
+            request {:provider :openai
+                     :model "gpt-3.5-turbo"
+                     :messages [{:role :user :content "Say 'test successful'"}]
+                     :max-tokens 10}]
         
         (try
-          (let [response (litellm/make-request system request)]
+          (let [response (system/make-request sys request)]
             (is (map? response) "Response should be a map")
             (is (contains? response :choices) "Response should have choices")
             (is (seq (:choices response)) "Choices should not be empty"))
           
           (finally
-            (litellm/shutdown-system! system)))))))
+            (system/shutdown-system! sys)))))))
