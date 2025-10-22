@@ -30,13 +30,10 @@ lint:
 	clojure -M:kondo --lint src test
 
 e2e:
-	@echo "Running E2E tests..."
-	@echo "Verifying example files can be loaded..."
-	@for file in examples/*.clj; do \
-		echo "Checking $$file..."; \
-		clojure -M -e "(load-file \"$$file\")" || echo "Note: $$file may require API keys to run"; \
-	done
-	@echo "✓ E2E tests complete"
+	@echo "Running E2E provider tests..."
+	@echo "Testing real API calls for each provider (configure API keys as needed)"
+	@echo ""
+	clojure -M test/e2e/run_e2e_tests.clj
 
 clean:
 	rm -rf target .cpcache
