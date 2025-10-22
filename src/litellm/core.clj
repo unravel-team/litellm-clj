@@ -104,12 +104,16 @@
      ;; Check if streaming
      (if (:stream request)
        ;; Streaming request - return channel
-       (let [transformed-request (providers/transform-request provider-name request config)]
-         (providers/make-streaming-request provider-name transformed-request @minimal-thread-pools config))
+       (let [;; Merge API key and other request params into config
+             merged-config (merge config (select-keys request [:api-key :api-base :timeout]))
+             transformed-request (providers/transform-request provider-name request merged-config)]
+         (providers/make-streaming-request provider-name transformed-request @minimal-thread-pools merged-config))
        
        ;; Non-streaming request - use the provider's make-request
-       (let [transformed-request (providers/transform-request provider-name request config)
-             response-future (providers/make-request provider-name transformed-request @minimal-thread-pools nil config)
+       (let [;; Merge API key and other request params into config
+             merged-config (merge config (select-keys request [:api-key :api-base :timeout]))
+             transformed-request (providers/transform-request provider-name request merged-config)
+             response-future (providers/make-request provider-name transformed-request @minimal-thread-pools nil merged-config)
              response @response-future]  ; Block and wait for response
          
          ;; Transform response
