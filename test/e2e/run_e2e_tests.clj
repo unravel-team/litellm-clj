@@ -7,7 +7,7 @@
   [provider-name model api-key-env]
   (let [api-key (System/getenv api-key-env)]
     (if-not api-key
-      (println (format "⚠️  Skipping %s - %s not set" provider-name api-key-env))
+      {:provider provider-name :status :skipped :reason (str api-key-env " not set")}
       (do
         (println (format "\n🧪 Testing %s provider..." provider-name))
         (try
@@ -43,7 +43,10 @@
           {:provider provider-name :status :passed}
           
           (catch Exception e
-            (println (format "❌ %s provider tests failed: %s\n" provider-name (.getMessage e)))
+            (println (format "❌ %s provider tests failed: %s" provider-name (.getMessage e)))
+            (println "Error details:")
+            (.printStackTrace e)
+            (println)
             {:provider provider-name :status :failed :error (.getMessage e)}))))))
 
 (defn test-ollama
@@ -89,6 +92,12 @@
     (println (format "  ✅ Passed:  %d" passed))
     (println (format "  ❌ Failed:  %d" failed))
     (println (format "  ⚠️  Skipped: %d" skipped))
+    
+    ;; Show skipped details
+    (when (> skipped 0)
+      (println "\nSkipped providers:")
+      (doseq [r (filter #(= :skipped (:status %)) results)]
+        (println (format "  - %s: %s" (:provider r) (:reason r)))))
     (println)
     
     ;; Exit with proper code
@@ -100,10 +109,10 @@
         (println "✅ All configured providers passed!")
         (System/exit 0)))))
 
-;; Run tests if executed directly
-(when (= *file* (System/getProperty "babashka.file"))
-  (run-all-tests))
-
 ;; For clojure execution
 (defn -main [& args]
   (run-all-tests))
+
+;; Only auto-run if this is the main script being executed
+(when (and *command-line-args* (empty? *command-line-args*))
+  (-main))
