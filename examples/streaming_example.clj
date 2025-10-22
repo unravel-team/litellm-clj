@@ -14,10 +14,9 @@
   (println "=== Basic Streaming Example ===\n")
   
   ;; Create a streaming request
-  (let [ch (llm/completion 
-             :model "openai/gpt-4"
-             :messages [{:role :user :content "Count to 5 slowly"}]
-             :stream true)]
+  (let [ch (llm/completion :openai "gpt-4"
+                           {:messages [{:role :user :content "Count to 5 slowly"}]
+                            :stream true})]
     
     ;; Consume the channel
     (go-loop []
@@ -40,10 +39,9 @@
   []
   (println "=== Accumulating Streaming Example ===\n")
   
-  (let [ch (llm/completion 
-             :model "openai/gpt-4"
-             :messages [{:role :user :content "Write a haiku about Clojure"}]
-             :stream true)]
+  (let [ch (llm/completion :openai "gpt-4"
+                           {:messages [{:role :user :content "Write a haiku about Clojure"}]
+                            :stream true})]
     
     (go-loop [accumulated ""]
       (if-let [chunk (<! ch)]
@@ -72,23 +70,23 @@
                    "What are monads?"
                    "Explain functional programming"]
         channels (map (fn [q]
-                       (llm/completion 
-                         :model "openai/gpt-4"
-                         :messages [{:role :user :content q}]
-                         :stream true
-                         :max-tokens 50))
+                       (llm/completion :openai "gpt-4"
+                                       {:messages [{:role :user :content q}]
+                                        :stream true
+                                        :max-tokens 50}))
                      questions)]
     
     ;; Process each stream
     (doseq [[i ch] (map-indexed vector channels)]
       (println "\nStream" (inc i) ":")
       (go-loop []
-        (when-let [chunk (<! ch)]
-          (when-let [content (streaming/extract-content chunk)]
-            (print content)
-            (flush))
-          (recur))
-        (println)))))
+        (if-let [chunk (<! ch)]
+          (do
+            (when-let [content (streaming/extract-content chunk)]
+              (print content)
+              (flush))
+            (recur))
+          (println))))))
 
 ;; ============================================================================
 ;; Error Handling Example
@@ -99,11 +97,10 @@
   []
   (println "=== Error Handling Example ===\n")
   
-  (let [ch (llm/completion 
-             :model "openai/gpt-4"
-             :messages [{:role :user :content "Hello"}]
-             :stream true
-             :api-key "invalid-key")]  ; Will cause error
+  (let [ch (llm/completion :openai "gpt-4"
+                           {:messages [{:role :user :content "Hello"}]
+                            :stream true
+                            :api-key "invalid-key"})]  ; Will cause error
     
     (go-loop []
       (when-let [chunk (<! ch)]
@@ -127,10 +124,9 @@
   []
   (println "=== Stream Filtering Example ===\n")
   
-  (let [source (llm/completion 
-                 :model "openai/gpt-4"
-                 :messages [{:role :user :content "Generate numbers: 1, 2, 3, 4, 5"}]
-                 :stream true)
+  (let [source (llm/completion :openai "gpt-4"
+                               {:messages [{:role :user :content "Generate numbers: 1, 2, 3, 4, 5"}]
+                                :stream true})
         ;; Only keep chunks with content
         filtered (streaming/filter-stream 
                    source 
@@ -157,8 +153,7 @@
   ;; export OPENAI_API_KEY="your-key-here"
   
   ;; Or pass it explicitly:
-  (llm/completion 
-    :model "openai/gpt-4"
-    :messages [{:role :user :content "Hello"}]
-    :stream true
-    :api-key "your-key"))
+  (llm/completion :openai "gpt-4"
+                  {:messages [{:role :user :content "Hello"}]
+                   :stream true
+                   :api-key "your-key"}))
