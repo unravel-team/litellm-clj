@@ -1,7 +1,6 @@
 (ns litellm.providers.openai
   "OpenAI provider implementation for LiteLLM"
-  (:require [litellm.providers.core :as core]
-            [litellm.streaming :as streaming]
+  (:require [litellm.streaming :as streaming]
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
@@ -292,7 +291,7 @@
               (loop []
                 (when-let [line (.readLine reader)]
                   (when-let [parsed (streaming/parse-sse-line line json/decode)]
-                    (let [transformed (core/transform-streaming-chunk :openai parsed)]
+                    (let [transformed (transform-streaming-chunk-impl :openai parsed)]
                       (>! output-ch transformed)))
                   (recur)))
               (.close reader)
@@ -346,10 +345,10 @@
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
-      (let [transformed (core/transform-request provider test-request)
-            response-future (core/make-request provider transformed thread-pools telemetry)
+      (let [transformed (transform-request-impl :openai test-request provider)
+            response-future (make-request-impl :openai transformed thread-pools telemetry provider)
             response @response-future
-            standard-response (core/transform-response provider response)]
+            standard-response (transform-response-impl :openai response)]
         {:success true
          :provider "openai"
          :model "gpt-3.5-turbo"

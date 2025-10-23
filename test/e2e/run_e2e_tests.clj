@@ -106,7 +106,7 @@
   
   (let [results [(test-provider :openai "gpt-3.5-turbo" "OPENAI_API_KEY")
                  (test-provider :anthropic "claude-3-haiku-20240307" "ANTHROPIC_API_KEY")
-                 (test-provider :gemini "gemini-1.5-flash" "GEMINI_API_KEY")
+                 (test-provider :gemini "gemini-2.5-flash-lite" "GEMINI_API_KEY")
                  (test-provider :mistral "mistral-small-latest" "MISTRAL_API_KEY")
                  (test-provider :openrouter "openai/gpt-3.5-turbo" "OPENROUTER_API_KEY")
                  (test-ollama)]

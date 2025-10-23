@@ -2,7 +2,8 @@ name: Lint
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - "*"
   pull_request:
     branches: [ main ]
 
@@ -25,11 +26,6 @@ jobs:
         uses: DeLaGuardo/setup-clojure@12.5
         with:
           cli: 1.11.1.1413
-      
-      - name: Run clj-kondo
-        uses: DeLaGuardo/setup-clj-kondo@master
-        with:
-          version: '2024.03.13'
       
       - name: Lint Clojure code
         run: make lint

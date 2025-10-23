@@ -1,10 +1,11 @@
 (ns litellm.providers.gemini
   "Google Gemini provider implementation for LiteLLM"
-  (:require [litellm.providers.core :as core]
+  (:require [litellm.streaming :as streaming]
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
+            [clojure.core.async :as async :refer [go >!]]
             [com.climate.claypoole :as cp]))
 
 ;; ============================================================================
@@ -182,14 +183,12 @@
    "gemini-2.0-flash" {:input 0.00000015 :output 0.0000006}
    "gemini-2.0-flash-latest" {:input 0.00000015 :output 0.0000006}
    "gemini-2.0-pro" {:input 0.00000125 :output 0.000005}
-   "gemini-2.0-pro-latest" {:input 0.00000125 :output 0.000005}})
+   "gemini-2.0-pro-latest" {:input 0.00000125 :output 0.000005}
+   "gemini-2.5-flash-lite" {:input 0.00000015 :output 0.0000006}})
 
 (def default-model-mapping
   "Default model name mappings"
-  {"gemini-1.5-flash" "gemini-1.5-flash-latest"
-   "gemini-1.5-pro" "gemini-1.5-pro-latest"
-   "gemini-2.0-flash" "gemini-2.0-flash-latest"
-   "gemini-2.0-pro" "gemini-2.0-pro-latest"})
+  {})
 
 ;; ============================================================================
 ;; Gemini Provider Implementation Functions
@@ -199,9 +198,12 @@
   "Gemini-specific transform-request implementation"
   [provider-name request config]
   (let [model (:model request)
+        ;; Map model name to -latest version if needed
+        mapped-model (get default-model-mapping model model)
         system-instruction (extract-system-instruction (:messages request))
         filtered-messages (filter #(not= :system (:role %)) (:messages request))
-        transformed {:contents (transform-messages filtered-messages)
+        transformed {:model mapped-model
+                    :contents (transform-messages filtered-messages)
                     :generation_config (transform-generation-config request)}]
     
     ;; Add system instruction if present
@@ -213,14 +215,17 @@
 (defn make-request-impl
   "Gemini-specific make-request implementation"
   [provider-name transformed-request thread-pools telemetry config]
-  (let [url (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/" (:model transformed-request) ":generateContent")]
+  (let [model (:model transformed-request)
+        url (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/" model ":generateContent")
+        ;; Remove :model from the request body - Gemini only uses it in the URL
+        request-body (dissoc transformed-request :model)]
     (cp/future (:api-calls thread-pools)
       (let [start-time (System/currentTimeMillis)
             response (http/post url
                                 {:headers {"x-goog-api-key" (:api-key config)
                                            "Content-Type" "application/json"
                                            "User-Agent" "litellm-clj/1.0.0"}
-                                 :body (json/encode transformed-request)
+                                 :body (json/encode request-body)
                                  :timeout (:timeout config 30000)
                                  :as :json})
             duration (- (System/currentTimeMillis) start-time)]
@@ -257,7 +262,7 @@
   [provider-name thread-pools config]
   (cp/future (:health-checks thread-pools)
     (try
-      (let [response (http/post (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/gemini-1.5-flash-latest:generateContent")
+      (let [response (http/post (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/gemini-2.5-flash-lite:generateContent")
                                 {:headers {"x-goog-api-key" (:api-key config)
                                            "Content-Type" "application/json"
                                            "User-Agent" "litellm-clj/1.0.0"}
@@ -304,20 +309,59 @@
                                "RECITATION" :content_filter
                                nil)}]}))
 
-(defn handle-streaming-response
-  "Handle streaming response from Gemini"
-  [response callback]
-  (let [body (:body response)]
-    (doseq [line (str/split-lines body)]
-      (when (str/starts-with? line "data: ")
-        (let [data (subs line 6)]
-          (when-not (= data "[DONE]")
-            (try
-              (let [parsed (json/decode data true)
-                    transformed (transform-streaming-chunk parsed)]
-                (callback transformed))
-              (catch Exception e
-                (log/debug "Failed to parse streaming chunk" {:line line :error (.getMessage e)})))))))))
+(defn transform-streaming-chunk-impl
+  "Gemini-specific transform-streaming-chunk implementation for multimethod"
+  [provider-name chunk]
+  (transform-streaming-chunk chunk))
+
+(defn make-streaming-request-impl
+  "Gemini-specific make-streaming-request implementation"
+  [provider-name transformed-request thread-pools config]
+  (let [model (:model transformed-request)
+        url (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/" model ":streamGenerateContent")
+        request-body (dissoc transformed-request :model)
+        output-ch (streaming/create-stream-channel)]
+    (go
+      (try
+        (let [response (http/post url
+                                  {:headers {"x-goog-api-key" (:api-key config)
+                                             "Content-Type" "application/json"
+                                             "User-Agent" "litellm-clj/1.0.0"}
+                                   :body (json/encode request-body)
+                                   :timeout (:timeout config 30000)
+                                   :as :stream})]
+          
+          ;; Handle errors
+          (when (>= (:status response) 400)
+            (>! output-ch (streaming/stream-error "gemini" 
+                                                  (str "HTTP " (:status response))
+                                                  :status (:status response)))
+            (streaming/close-stream! output-ch))
+          
+          ;; Process streaming response - Gemini uses JSON-per-line, not SSE
+          (when (= 200 (:status response))
+            (let [body (:body response)
+                  reader (java.io.BufferedReader. 
+                          (java.io.InputStreamReader. body "UTF-8"))]
+              (loop []
+                (when-let [line (.readLine reader)]
+                  (when (seq (str/trim line))
+                    (try
+                      (let [parsed (json/decode line true)
+                            transformed (transform-streaming-chunk-impl :gemini parsed)]
+                        (>! output-ch transformed))
+                      (catch Exception e
+                        (log/debug "Failed to parse Gemini streaming chunk" {:line line :error (.getMessage e)}))))
+                  (recur)))
+              (.close reader)
+              (streaming/close-stream! output-ch))))
+        
+        (catch Exception e
+          (log/error "Error in streaming request" {:error (.getMessage e)})
+          (>! output-ch (streaming/stream-error "gemini" (.getMessage e)))
+          (streaming/close-stream! output-ch))))
+    
+    output-ch))
 
 ;; ============================================================================
 ;; Utility Functions
@@ -365,10 +409,10 @@
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
-      (let [transformed (core/transform-request provider test-request)
-            response-future (core/make-request provider transformed thread-pools telemetry)
+      (let [transformed (transform-request-impl :gemini test-request provider)
+            response-future (make-request-impl :gemini transformed thread-pools telemetry provider)
             response @response-future
-            standard-response (core/transform-response provider response)]
+            standard-response (transform-response-impl :gemini response)]
         {:success true
          :provider "gemini"
          :model "gemini-1.5-flash-latest"

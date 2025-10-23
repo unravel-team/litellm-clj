@@ -2,7 +2,8 @@ name: Tests
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - "*"
   pull_request:
     branches: [ main ]
 
@@ -36,7 +37,7 @@ jobs:
           path: |
             ~/.m2/repository
             ~/.gitlibs
-          key: ${{ runner.os }}-clojure-${{ hashFiles('**/deps.edn') }}
+          key: ${{ runner.os }}-clojure-${{ hashFiles('**/deps.edn', '**/tests.edn') }}
           restore-keys: |
             ${{ runner.os }}-clojure-
       
@@ -46,16 +47,14 @@ jobs:
       - name: Run tests
         run: make test
       
-      # Coverage generation disabled temporarily due to empty placeholder test files
-      # TODO: Re-enable after adding proper test implementations
-      # - name: Generate coverage report (JDK 17 only)
-      #   if: matrix.java == '17'
-      #   run: clojure -M:test:coverage
-      # 
-      # - name: Upload coverage to Codecov (JDK 17 only)
-      #   if: matrix.java == '17'
-      #   uses: codecov/codecov-action@v4
-      #   with:
-      #     files: ./target/coverage/codecov.json
-      #     fail_ci_if_error: false
-      #     token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Generate coverage report (JDK 17 only)
+        if: matrix.java == '17'
+        run: clojure -M:test:coverage
+      
+      - name: Upload coverage to Codecov (JDK 17 only)
+        if: matrix.java == '17'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./target/coverage/codecov.json
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}

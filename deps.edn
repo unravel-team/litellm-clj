@@ -9,13 +9,6 @@
         ;; Thread Management
         com.climate/claypoole {:mvn/version "1.1.4"}
         
-        ;; Configuration
-        aero/aero {:mvn/version "1.1.6"}
-        
-        ;; Caching
-        org.clojure/core.cache {:mvn/version "1.0.225"}
-        com.taoensso/carmine {:mvn/version "3.2.0"}
-        
         ;; Logging
         ch.qos.logback/logback-classic {:mvn/version "1.4.11"}
         org.clojure/tools.logging {:mvn/version "1.2.4"}
@@ -23,17 +16,8 @@
         ;; Async
         org.clojure/core.async {:mvn/version "1.6.681"}
         
-        ;; Utilities
-        medley/medley {:mvn/version "1.4.0"}
-        camel-snake-kebab/camel-snake-kebab {:mvn/version "0.4.3"}
-        
         ;; Schema validation
-        metosin/malli {:mvn/version "0.13.0"}
-        
-        ;; Testing (for development)
-        lambdaisland/kaocha {:mvn/version "1.87.1366"}
-        org.clojure/test.check {:mvn/version "1.1.1"}
-        mockery/mockery {:mvn/version "0.1.4"}}
+        metosin/malli {:mvn/version "0.13.0"}}
  
  :aliases
  {:dev {:extra-paths ["dev" "test"]
