@@ -50,13 +50,14 @@ Include the tools in your chat completion request:
 (require '[litellm.core :as litellm])
 
 (def response
-  (litellm/chat-completion
-    {:provider :anthropic
-     :model "claude-3-sonnet"
-     :messages [{:role :user 
+  (litellm/completion 
+    :anthropic 
+    "claude-3-sonnet-20240229"
+    {:messages [{:role :user 
                  :content "What's the weather like in San Francisco?"}]
      :tools [weather-tool]
-     :tool-choice :auto}))
+     :tool-choice :auto
+     :api-key "your-api-key"}))
 ```
 
 ### 3. Check for Tool Calls
@@ -92,13 +93,14 @@ Execute the requested tools and send the results back to the model:
 
 ;; Continue the conversation with tool results
 (def final-response
-  (litellm/chat-completion
-    {:provider :anthropic
-     :model "claude-3-sonnet"
-     :messages (concat
+  (litellm/completion
+    :anthropic
+    "claude-3-sonnet-20240229"
+    {:messages (concat
                  [{:role :user :content "What's the weather like in San Francisco?"}]
                  [(get-in response [:choices 0 :message])]
-                 tool-results)}))
+                 tool-results)
+     :api-key "your-api-key"}))
 ```
 
 ## Tool Choice Options
@@ -174,15 +176,16 @@ Here's a complete example with a weather tool:
       (json/encode {:error "Unknown function"}))))
 
 ;; Main conversation loop
-(defn weather-conversation []
+(defn weather-conversation [api-key]
   ;; Step 1: Initial request
-  (let [response (litellm/chat-completion
-                   {:provider :anthropic
-                    :model "claude-3-sonnet"
-                    :messages [{:role :user 
+  (let [response (litellm/completion
+                   :anthropic
+                   "claude-3-sonnet-20240229"
+                   {:messages [{:role :user 
                                :content "What's the weather in Tokyo?"}]
                     :tools [weather-tool]
-                    :tool-choice :auto})
+                    :tool-choice :auto
+                    :api-key api-key})
         
         tool-calls (get-in response [:choices 0 :message :tool-calls])]
     
@@ -195,12 +198,13 @@ Here's a complete example with a weather tool:
                               tool-calls)
             
             ;; Step 3: Send results back
-            final-response (litellm/chat-completion
-                             {:provider :anthropic
-                              :model "claude-3-sonnet"
-                              :messages [{:role :user :content "What's the weather in Tokyo?"}
+            final-response (litellm/completion
+                             :anthropic
+                             "claude-3-sonnet-20240229"
+                             {:messages [{:role :user :content "What's the weather in Tokyo?"}
                                         (get-in response [:choices 0 :message])
-                                        (first tool-results)]})]
+                                        (first tool-results)]
+                              :api-key api-key})]
         
         (get-in final-response [:choices 0 :message :content]))
       
@@ -240,17 +244,18 @@ Here's a complete example with a weather tool:
 Function calling often requires multiple turns. Here's a pattern for handling multi-turn conversations:
 
 ```clojure
-(defn conversation-loop [initial-message tools]
+(defn conversation-loop [initial-message tools api-key]
   (loop [messages [{:role :user :content initial-message}]
          turn 1
          max-turns 5]
     (when (<= turn max-turns)
-      (let [response (litellm/chat-completion
-                       {:provider :anthropic
-                        :model "claude-3-sonnet"
-                        :messages messages
+      (let [response (litellm/completion
+                       :anthropic
+                       "claude-3-sonnet-20240229"
+                       {:messages messages
                         :tools tools
-                        :tool-choice :auto})
+                        :tool-choice :auto
+                        :api-key api-key})
             
             assistant-msg (get-in response [:choices 0 :message])
             tool-calls (:tool-calls assistant-msg)]
