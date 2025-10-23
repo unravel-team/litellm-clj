@@ -1,0 +1,35 @@
+name: Lint
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    name: Lint with clj-kondo
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Install Clojure tools
+        uses: DeLaGuardo/setup-clojure@12.5
+        with:
+          cli: 1.11.1.1413
+      
+      - name: Run clj-kondo
+        uses: DeLaGuardo/setup-clj-kondo@master
+        with:
+          version: '2024.03.13'
+      
+      - name: Lint Clojure code
+        run: make lint

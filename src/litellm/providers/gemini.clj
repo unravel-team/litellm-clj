@@ -192,11 +192,12 @@
    "gemini-2.0-pro" "gemini-2.0-pro-latest"})
 
 ;; ============================================================================
-;; Gemini Provider Multimethod Implementations
+;; Gemini Provider Implementation Functions
 ;; ============================================================================
 
-(defmethod core/transform-request :gemini
-  [_ request config]
+(defn transform-request-impl
+  "Gemini-specific transform-request implementation"
+  [provider-name request config]
   (let [model (:model request)
         system-instruction (extract-system-instruction (:messages request))
         filtered-messages (filter #(not= :system (:role %)) (:messages request))
@@ -209,8 +210,9 @@
       (:tools request) (assoc :tools [(transform-tools (:tools request))])
       (:tool-choice request) (assoc :tool_config {:function_calling_config {:mode (transform-tool-choice (:tool-choice request))}}))))
 
-(defmethod core/make-request :gemini
-  [_ transformed-request thread-pools telemetry config]
+(defn make-request-impl
+  "Gemini-specific make-request implementation"
+  [provider-name transformed-request thread-pools telemetry config]
   (let [url (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/" (:model transformed-request) ":generateContent")]
     (cp/future (:api-calls thread-pools)
       (let [start-time (System/currentTimeMillis)
@@ -229,20 +231,30 @@
         
         response))))
 
-(defmethod core/transform-response :gemini
-  [_ response]
+(defn transform-response-impl
+  "Gemini-specific transform-response implementation"
+  [provider-name response]
   (transform-response response))
 
-(defmethod core/supports-streaming? :gemini [_] true)
+(defn supports-streaming-impl
+  "Gemini-specific supports-streaming? implementation"
+  [provider-name]
+  true)
 
-(defmethod core/supports-function-calling? :gemini [_] true)
+(defn supports-function-calling-impl
+  "Gemini-specific supports-function-calling? implementation"
+  [provider-name]
+  true)
 
-(defmethod core/get-rate-limits :gemini [_]
+(defn get-rate-limits-impl
+  "Gemini-specific get-rate-limits implementation"
+  [provider-name]
   {:requests-per-minute 60
    :tokens-per-minute 60000})
 
-(defmethod core/health-check :gemini
-  [_ thread-pools config]
+(defn health-check-impl
+  "Gemini-specific health-check implementation"
+  [provider-name thread-pools config]
   (cp/future (:health-checks thread-pools)
     (try
       (let [response (http/post (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/gemini-1.5-flash-latest:generateContent")
@@ -258,8 +270,9 @@
         (log/warn "Gemini health check failed" {:error (.getMessage e)})
         false))))
 
-(defmethod core/get-cost-per-token :gemini
-  [_ model]
+(defn get-cost-per-token-impl
+  "Gemini-specific get-cost-per-token implementation"
+  [provider-name model]
   (get default-cost-map model {:input 0.0 :output 0.0}))
 
 ;; ============================================================================

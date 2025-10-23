@@ -116,11 +116,12 @@
    "llava" {:input 0.0 :output 0.0}})
 
 ;; ============================================================================
-;; Ollama Provider Multimethod Implementations
+;; Ollama Provider Implementation Functions
 ;; ============================================================================
 
-(defmethod core/transform-request :ollama
-  [_ request config]
+(defn transform-request-impl
+  "Ollama-specific transform-request implementation"
+  [provider-name request config]
   (let [original-model (:model request)
         is-chat (str/starts-with? original-model "ollama_chat/")
         model (core/extract-model-name original-model)
@@ -147,8 +148,9 @@
                         :top_p (or (:top-p request) 1.0)}}
         (:format request) (assoc :format (:format request))))))
 
-(defmethod core/make-request :ollama
-  [_ transformed-request thread-pools telemetry config]
+(defn make-request-impl
+  "Ollama-specific make-request implementation"
+  [provider-name transformed-request thread-pools telemetry config]
   (let [model (:model transformed-request)
         is-chat (contains? transformed-request :messages)
         url (str (:api-base config "http://localhost:11434") (if is-chat "/api/chat" "/api/generate"))]
@@ -170,8 +172,9 @@
         ;; Add request type to response for later processing
         (assoc response :ollama-request-type (if is-chat :chat :generate))))))
 
-(defmethod core/transform-response :ollama
-  [_ response]
+(defn transform-response-impl
+  "Ollama-specific transform-response implementation"
+  [provider-name response]
   (let [request-type (:ollama-request-type response)]
     (case request-type
       :chat (transform-chat-response response)
@@ -179,16 +182,25 @@
       ;; Default case
       (transform-generate-response response))))
 
-(defmethod core/supports-streaming? :ollama [_] true)
+(defn supports-streaming-impl
+  "Ollama-specific supports-streaming? implementation"
+  [provider-name]
+  true)
 
-(defmethod core/supports-function-calling? :ollama [_] false)
+(defn supports-function-calling-impl
+  "Ollama-specific supports-function-calling? implementation"
+  [provider-name]
+  false)
 
-(defmethod core/get-rate-limits :ollama [_]
+(defn get-rate-limits-impl
+  "Ollama-specific get-rate-limits implementation"
+  [provider-name]
   {:requests-per-minute 60
    :tokens-per-minute 100000})
 
-(defmethod core/health-check :ollama
-  [_ thread-pools config]
+(defn health-check-impl
+  "Ollama-specific health-check implementation"
+  [provider-name thread-pools config]
   (cp/future (:health-checks thread-pools)
     (try
       (let [response (http/get (str (:api-base config "http://localhost:11434") "/api/tags")
@@ -198,8 +210,9 @@
         (log/warn "Ollama health check failed" {:error (.getMessage e)})
         false))))
 
-(defmethod core/get-cost-per-token :ollama
-  [_ model]
+(defn get-cost-per-token-impl
+  "Ollama-specific get-cost-per-token implementation"
+  [provider-name model]
   (get default-cost-map model {:input 0.0 :output 0.0}))
 
 ;; ============================================================================

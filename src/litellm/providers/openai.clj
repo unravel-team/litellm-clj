@@ -1,10 +1,11 @@
 (ns litellm.providers.openai
   "OpenAI provider implementation for LiteLLM"
   (:require [litellm.providers.core :as core]
+            [litellm.streaming :as streaming]
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
-            [clojure.string :as str]
+            [clojure.core.async :as async :refer [go >!]]
             [com.climate.claypoole :as cp]))
 
 ;; ============================================================================
@@ -152,11 +153,12 @@
    "gpt-3.5-turbo" "gpt-3.5-turbo"})
 
 ;; ============================================================================
-;; OpenAI Provider Multimethod Implementations
+;; OpenAI Provider Implementation Functions
 ;; ============================================================================
 
-(defmethod core/transform-request :openai
-  [_ request config]
+(defn transform-request-impl
+  "OpenAI-specific transform-request implementation"
+  [provider-name request config]
   (let [model (:model request)
         transformed {:model model
                     :messages (transform-messages (:messages request))
@@ -175,8 +177,9 @@
       (:functions request) (assoc :functions (transform-functions (:functions request)))
       (:function-call request) (assoc :function_call (transform-function-call (:function-call request))))))
 
-(defmethod core/make-request :openai
-  [_ transformed-request thread-pools telemetry config]
+(defn make-request-impl
+  "OpenAI-specific make-request implementation"
+  [provider-name transformed-request thread-pools telemetry config]
   (let [url (str (:api-base config "https://api.openai.com/v1") "/chat/completions")]
     (cp/future (:api-calls thread-pools)
       (let [start-time (System/currentTimeMillis)
@@ -195,8 +198,9 @@
         
         response))))
 
-(defmethod core/transform-response :openai
-  [_ response]
+(defn transform-response-impl
+  "OpenAI-specific transform-response implementation"
+  [provider-name response]
   (let [body (:body response)]
     {:id (:id body)
      :object (:object body)
@@ -205,16 +209,25 @@
      :choices (map transform-choice (:choices body))
      :usage (transform-usage (:usage body))}))
 
-(defmethod core/supports-streaming? :openai [_] true)
+(defn supports-streaming-impl
+  "OpenAI-specific supports-streaming? implementation"
+  [provider-name]
+  true)
 
-(defmethod core/supports-function-calling? :openai [_] true)
+(defn supports-function-calling-impl
+  "OpenAI-specific supports-function-calling? implementation"
+  [provider-name]
+  true)
 
-(defmethod core/get-rate-limits :openai [_]
+(defn get-rate-limits-impl
+  "OpenAI-specific get-rate-limits implementation"
+  [provider-name]
   {:requests-per-minute 3500
    :tokens-per-minute 90000})
 
-(defmethod core/health-check :openai
-  [_ thread-pools config]
+(defn health-check-impl
+  "OpenAI-specific health-check implementation"
+  [provider-name thread-pools config]
   (cp/future (:health-checks thread-pools)
     (try
       (let [response (http/get (str (:api-base config "https://api.openai.com/v1") "/models")
@@ -225,29 +238,18 @@
         (log/warn "OpenAI health check failed" {:error (.getMessage e)})
         false))))
 
-(defmethod core/get-cost-per-token :openai
-  [_ model]
+(defn get-cost-per-token-impl
+  "OpenAI-specific get-cost-per-token implementation"
+  [provider-name model]
   (get default-cost-map model {:input 0.0 :output 0.0}))
 
 ;; ============================================================================
 ;; Streaming Support
 ;; ============================================================================
 
-(defn parse-sse-line
-  "Parse a Server-Sent Events line"
-  [line]
-  (when (str/starts-with? line "data: ")
-    (let [data (subs line 6)]
-      (when-not (= data "[DONE]")
-        (try
-          (json/decode data true)
-          (catch Exception e
-            (log/debug "Failed to parse SSE line" {:line line :error (.getMessage e)})
-            nil))))))
-
-(defn transform-streaming-chunk
-  "Transform OpenAI streaming chunk to standard format"
-  [chunk]
+(defn transform-streaming-chunk-impl
+  "OpenAI-specific transform-streaming-chunk implementation"
+  [provider-name chunk]
   (let [choice (first (:choices chunk))
         delta (:delta choice)]
     {:id (:id chunk)
@@ -260,14 +262,48 @@
                :finish-reason (when (:finish_reason choice)
                                (keyword (:finish_reason choice)))}]}))
 
-(defn handle-streaming-response
-  "Handle streaming response from OpenAI"
-  [response callback]
-  (let [body (:body response)]
-    (doseq [line (str/split-lines body)]
-      (when-let [parsed (parse-sse-line line)]
-        (let [transformed (transform-streaming-chunk parsed)]
-          (callback transformed))))))
+(defn make-streaming-request-impl
+  "OpenAI-specific make-streaming-request implementation"
+  [provider-name transformed-request thread-pools config]
+  (let [url (str (:api-base config "https://api.openai.com/v1") "/chat/completions")
+        output-ch (streaming/create-stream-channel)]
+    (go
+      (try
+        (let [response (http/post url
+                                  {:headers {"Authorization" (str "Bearer " (:api-key config))
+                                             "Content-Type" "application/json"
+                                             "User-Agent" "litellm-clj/1.0.0"}
+                                   :body (json/encode transformed-request)
+                                   :timeout (:timeout config 30000)
+                                   :as :stream})]
+          
+          ;; Handle errors
+          (when (>= (:status response) 400)
+            (>! output-ch (streaming/stream-error "openai" 
+                                                  (str "HTTP " (:status response))
+                                                  :status (:status response)))
+            (streaming/close-stream! output-ch))
+          
+          ;; Process streaming response
+          (when (= 200 (:status response))
+            (let [body (:body response)
+                  reader (java.io.BufferedReader. 
+                          (java.io.InputStreamReader. body "UTF-8"))]
+              (loop []
+                (when-let [line (.readLine reader)]
+                  (when-let [parsed (streaming/parse-sse-line line json/decode)]
+                    (let [transformed (core/transform-streaming-chunk :openai parsed)]
+                      (>! output-ch transformed)))
+                  (recur)))
+              (.close reader)
+              (streaming/close-stream! output-ch))))
+        
+        (catch Exception e
+          (log/error "Error in streaming request" {:error (.getMessage e)})
+          (>! output-ch (streaming/stream-error "openai" (.getMessage e)))
+          (streaming/close-stream! output-ch))))
+    
+    output-ch))
 
 ;; ============================================================================
 ;; Utility Functions

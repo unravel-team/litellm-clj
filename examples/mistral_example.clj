@@ -1,7 +1,6 @@
 (ns mistral-example
   "Example usage of Mistral AI provider with litellm-clj"
-  (:require [litellm.core :as litellm]
-            [litellm.providers.mistral :as mistral]))
+  (:require [litellm.core :as litellm]))
 
 ;; ============================================================================
 ;; Basic Setup
@@ -10,23 +9,17 @@
 ;; Set your Mistral API key (or set MISTRAL_API_KEY environment variable)
 (def api-key (or (System/getenv "MISTRAL_API_KEY") "your-api-key-here"))
 
-;; Create a Mistral provider instance
-(def mistral-provider
-  (mistral/create-mistral-provider
-    {:api-key api-key}))
-
 ;; ============================================================================
 ;; Example 1: Basic Chat Completion
 ;; ============================================================================
 
 (defn basic-chat-example []
   (println "\n=== Basic Chat Example ===")
-  (let [response @(litellm/completion
-                    {:provider mistral-provider
-                     :model "mistral/mistral-small-latest"
-                     :messages [{:role :user 
-                                :content "What is the capital of France?"}]
-                     :max-tokens 100})]
+  (let [response (litellm/completion :mistral "mistral-small-latest"
+                                     {:messages [{:role :user 
+                                                :content "What is the capital of France?"}]
+                                      :max-tokens 100
+                                      :api-key api-key})]
     (println "Response:" (get-in response [:choices 0 :message :content]))
     response))
 
@@ -36,13 +29,12 @@
 
 (defn temperature-example []
   (println "\n=== Temperature Control Example ===")
-  (let [response @(litellm/completion
-                    {:provider mistral-provider
-                     :model "mistral/mistral-small-latest"
-                     :messages [{:role :user 
-                                :content "Write a creative short story about a robot."}]
-                     :max-tokens 200
-                     :temperature 0.9})]
+  (let [response (litellm/completion :mistral "mistral-small-latest"
+                                     {:messages [{:role :user 
+                                                :content "Write a creative short story about a robot."}]
+                                      :max-tokens 200
+                                      :temperature 0.9
+                                      :api-key api-key})]
     (println "Creative response:" (get-in response [:choices 0 :message :content]))
     response))
 
@@ -52,18 +44,17 @@
 
 (defn conversation-example []
   (println "\n=== Multi-turn Conversation Example ===")
-  (let [response @(litellm/completion
-                    {:provider mistral-provider
-                     :model "mistral/mistral-small-latest"
-                     :messages [{:role :system 
-                                :content "You are a helpful coding assistant."}
-                               {:role :user 
-                                :content "What is recursion?"}
-                               {:role :assistant 
-                                :content "Recursion is when a function calls itself."}
-                               {:role :user 
-                                :content "Can you give me an example in Clojure?"}]
-                     :max-tokens 300})]
+  (let [response (litellm/completion :mistral "mistral-small-latest"
+                                     {:messages [{:role :system 
+                                                :content "You are a helpful coding assistant."}
+                                               {:role :user 
+                                                :content "What is recursion?"}
+                                               {:role :assistant 
+                                                :content "Recursion is when a function calls itself."}
+                                               {:role :user 
+                                                :content "Can you give me an example in Clojure?"}]
+                                      :max-tokens 300
+                                      :api-key api-key})]
     (println "Assistant:" (get-in response [:choices 0 :message :content]))
     response))
 
@@ -73,13 +64,12 @@
 
 (defn large-model-example []
   (println "\n=== Mistral Large Example ===")
-  (let [response @(litellm/completion
-                    {:provider mistral-provider
-                     :model "mistral/mistral-large-latest"
-                     :messages [{:role :user 
-                                :content "Explain quantum computing in simple terms."}]
-                     :max-tokens 500
-                     :temperature 0.7})]
+  (let [response (litellm/completion :mistral "mistral-large-latest"
+                                     {:messages [{:role :user 
+                                                :content "Explain quantum computing in simple terms."}]
+                                      :max-tokens 500
+                                      :temperature 0.7
+                                      :api-key api-key})]
     (println "Explanation:" (get-in response [:choices 0 :message :content]))
     response))
 
@@ -98,13 +88,12 @@
                                                :unit {:type "string"
                                                      :enum ["celsius" "fahrenheit"]}}
                                     :required ["location"]}}}]
-        response @(litellm/completion
-                    {:provider mistral-provider
-                     :model "mistral/mistral-large-latest"
-                     :messages [{:role :user 
-                                :content "What's the weather like in Paris?"}]
-                     :tools tools
-                     :tool-choice :auto})]
+        response (litellm/completion :mistral "mistral-large-latest"
+                                     {:messages [{:role :user 
+                                                :content "What's the weather like in Paris?"}]
+                                      :tools tools
+                                      :tool-choice :auto
+                                      :api-key api-key})]
     (println "Response:" response)
     (when-let [tool-calls (get-in response [:choices 0 :message :tool-calls])]
       (println "Tool calls:" tool-calls))
@@ -116,13 +105,12 @@
 
 (defn reasoning-example []
   (println "\n=== Reasoning Example (Magistral Model) ===")
-  (let [response @(litellm/completion
-                    {:provider mistral-provider
-                     :model "mistral/magistral-medium-2506"
-                     :messages [{:role :user 
-                                :content "What is 15 multiplied by 7? Show your reasoning."}]
-                     :reasoning-effort "medium"
-                     :max-tokens 500})]
+  (let [response (litellm/completion :mistral "magistral-medium-2506"
+                                     {:messages [{:role :user 
+                                                :content "What is 15 multiplied by 7? Show your reasoning."}]
+                                      :reasoning-effort "medium"
+                                      :max-tokens 500
+                                      :api-key api-key})]
     (println "Reasoning response:" (get-in response [:choices 0 :message :content]))
     response))
 
@@ -132,63 +120,24 @@
 
 (defn code-generation-example []
   (println "\n=== Code Generation Example (Codestral) ===")
-  (let [response @(litellm/completion
-                    {:provider mistral-provider
-                     :model "mistral/codestral-latest"
-                     :messages [{:role :user 
-                                :content "Write a Clojure function to calculate fibonacci numbers."}]
-                     :max-tokens 300})]
+  (let [response (litellm/completion :mistral "codestral-latest"
+                                     {:messages [{:role :user 
+                                                :content "Write a Clojure function to calculate fibonacci numbers."}]
+                                      :max-tokens 300
+                                      :api-key api-key})]
     (println "Generated code:" (get-in response [:choices 0 :message :content]))
     response))
 
 ;; ============================================================================
-;; Example 8: Embeddings
+;; Example 8: Simple Chat Helper
 ;; ============================================================================
 
-(defn embeddings-example []
-  (println "\n=== Embeddings Example ===")
-  (let [thread-pools (litellm/create-thread-pools)
-        embedding-response @(mistral/make-embedding-request
-                              mistral-provider
-                              "Hello, this is a test sentence for embedding."
-                              "mistral-embed"
-                              thread-pools)]
-    (println "Embedding dimensions:" (count (get-in embedding-response [:data 0 :embedding])))
-    (println "First 5 values:" (take 5 (get-in embedding-response [:data 0 :embedding])))
-    embedding-response))
-
-;; ============================================================================
-;; Example 9: Streaming Responses
-;; ============================================================================
-
-(defn streaming-example []
-  (println "\n=== Streaming Example ===")
-  (println "Note: Streaming requires special handling in the core library")
-  ;; This is a placeholder - actual streaming would require additional implementation
-  (let [response @(litellm/completion
-                    {:provider mistral-provider
-                     :model "mistral/mistral-small-latest"
-                     :messages [{:role :user 
-                                :content "Count from 1 to 10"}]
-                     :stream false
-                     :max-tokens 100})]
-    (println "Response:" (get-in response [:choices 0 :message :content]))
+(defn simple-chat-example []
+  (println "\n=== Simple Chat Helper ===")
+  (let [response (litellm/chat :mistral "mistral-small-latest" "What is 2+2?"
+                                :api-key api-key)]
+    (println "Response:" (litellm/extract-content response))
     response))
-
-;; ============================================================================
-;; Example 10: Error Handling
-;; ============================================================================
-
-(defn error-handling-example []
-  (println "\n=== Error Handling Example ===")
-  (try
-    @(litellm/completion
-       {:provider mistral-provider
-        :model "mistral/non-existent-model"
-        :messages [{:role :user :content "Test"}]})
-    (catch Exception e
-      (println "Caught error:" (.getMessage e))
-      (println "Error type:" (ex-data e)))))
 
 ;; ============================================================================
 ;; Run All Examples
@@ -206,9 +155,7 @@
   (function-calling-example)
   (reasoning-example)
   (code-generation-example)
-  (embeddings-example)
-  (streaming-example)
-  (error-handling-example)
+  (simple-chat-example)
   
   (println "\n=== All examples completed! ==="))
 

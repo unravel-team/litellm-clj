@@ -1,10 +1,12 @@
 (ns litellm.providers.anthropic
   "Anthropic provider implementation for LiteLLM"
   (:require [litellm.providers.core :as core]
+            [litellm.streaming :as streaming]
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
+            [clojure.core.async :as async]
             [com.climate.claypoole :as cp]))
 
 ;; ============================================================================
@@ -109,11 +111,12 @@
    "claude-instant-1.2" "claude-instant-1.2"})
 
 ;; ============================================================================
-;; Anthropic Provider Multimethod Implementations
+;; Anthropic Provider Implementation Functions
 ;; ============================================================================
 
-(defmethod core/transform-request :anthropic
-  [_ request config]
+(defn transform-request-impl
+  "Anthropic-specific transform-request implementation"
+  [provider-name request config]
   (let [model (core/extract-model-name (:model request))
         mapped-model (get (:model-mapping config default-model-mapping) model model)
         messages-data (transform-messages (:messages request))
@@ -128,8 +131,9 @@
       (:system messages-data) (assoc :system (:system messages-data))
       (:messages messages-data) (assoc :messages (:messages messages-data)))))
 
-(defmethod core/make-request :anthropic
-  [_ transformed-request thread-pools telemetry config]
+(defn make-request-impl
+  "Anthropic-specific make-request implementation"
+  [provider-name transformed-request thread-pools telemetry config]
   (let [url (str (:api-base config "https://api.anthropic.com") "/v1/messages")]
     (cp/future (:api-calls thread-pools)
       (let [start-time (System/currentTimeMillis)
@@ -149,8 +153,9 @@
         
         response))))
 
-(defmethod core/transform-response :anthropic
-  [_ response]
+(defn transform-response-impl
+  "Anthropic-specific transform-response implementation"
+  [provider-name response]
   (let [body (:body response)]
     {:id (:id body)
      :object "chat.completion"
@@ -159,16 +164,25 @@
      :choices [(transform-choice body 0)]
      :usage (transform-usage (:usage body))}))
 
-(defmethod core/supports-streaming? :anthropic [_] true)
+(defn supports-streaming-impl
+  "Anthropic-specific supports-streaming? implementation"
+  [provider-name]
+  true)
 
-(defmethod core/supports-function-calling? :anthropic [_] false)
+(defn supports-function-calling-impl
+  "Anthropic-specific supports-function-calling? implementation"
+  [provider-name]
+  false)
 
-(defmethod core/get-rate-limits :anthropic [_]
+(defn get-rate-limits-impl
+  "Anthropic-specific get-rate-limits implementation"
+  [provider-name]
   {:requests-per-minute 240
    :tokens-per-minute 60000})
 
-(defmethod core/health-check :anthropic
-  [_ thread-pools config]
+(defn health-check-impl
+  "Anthropic-specific health-check implementation"
+  [provider-name thread-pools config]
   (cp/future (:health-checks thread-pools)
     (try
       (let [response (http/get (str (:api-base config "https://api.anthropic.com") "/v1/models")
@@ -180,47 +194,116 @@
         (log/warn "Anthropic health check failed" {:error (.getMessage e)})
         false))))
 
-(defmethod core/get-cost-per-token :anthropic
-  [_ model]
+(defn get-cost-per-token-impl
+  "Anthropic-specific get-cost-per-token implementation"
+  [provider-name model]
   (get default-cost-map model {:input 0.0 :output 0.0}))
 
 ;; ============================================================================
 ;; Streaming Support
 ;; ============================================================================
 
-(defn parse-sse-line
-  "Parse a Server-Sent Events line"
-  [line]
-  (when (str/starts-with? line "data: ")
-    (let [data (subs line 6)]
-      (when-not (= data "[DONE]")
-        (try
-          (json/decode data true)
-          (catch Exception e
-            (log/debug "Failed to parse SSE line" {:line line :error (.getMessage e)})
-            nil))))))
+(defn transform-streaming-chunk-impl
+  "Anthropic-specific transform-streaming-chunk implementation"
+  [provider-name chunk]
+  (let [event-type (:type chunk)]
+    (case event-type
+      "content_block_delta" {:id (:message_id chunk)
+                             :object "chat.completion.chunk"
+                             :created (quot (System/currentTimeMillis) 1000)
+                             :model (:model chunk)
+                             :choices [{:index 0
+                                       :delta {:role :assistant
+                                              :content (get-in chunk [:delta :text])}
+                                       :finish-reason nil}]}
+      "message_stop" {:id (:message_id chunk)
+                     :object "chat.completion.chunk"
+                     :created (quot (System/currentTimeMillis) 1000)
+                     :model (:model chunk)
+                     :choices [{:index 0
+                               :delta {}
+                               :finish-reason :stop}]}
+      nil)))
 
-(defn transform-streaming-chunk
-  "Transform Anthropic streaming chunk to standard format"
-  [chunk]
-  {:id (:id chunk)
-   :object "chat.completion.chunk"
-   :created (quot (System/currentTimeMillis) 1000)
-   :model (:model chunk)
-   :choices [{:index 0
-             :delta {:role :assistant
-                    :content (get-in chunk [:delta :text])}
-             :finish-reason (when (:stop_reason chunk)
-                             (keyword (:stop_reason chunk)))}]})
-
-(defn handle-streaming-response
-  "Handle streaming response from Anthropic"
-  [response callback]
-  (let [body (:body response)]
-    (doseq [line (str/split-lines body)]
-      (when-let [parsed (parse-sse-line line)]
-        (let [transformed (transform-streaming-chunk parsed)]
-          (callback transformed))))))
+(defn make-streaming-request-impl
+  "Anthropic-specific make-streaming-request implementation"
+  [provider-name transformed-request thread-pools config]
+  (let [url (str (:api-base config "https://api.anthropic.com") "/v1/messages")
+        output-ch (streaming/create-stream-channel)]
+    ;; Use thread instead of go for blocking I/O
+    (async/thread
+      (try
+        (log/debug "Making Anthropic streaming request" {:url url :request transformed-request})
+        (let [response (http/post url
+                                  {:headers {"x-api-key" (:api-key config)
+                                             "anthropic-version" "2023-06-01"
+                                             "Content-Type" "application/json"
+                                             "User-Agent" "litellm-clj/1.0.0"}
+                                   :body (json/encode transformed-request)
+                                   :timeout (:timeout config 30000)
+                                   :as :stream})]
+          
+          (log/debug "Received response" {:status (:status response) :headers (:headers response)})
+          
+          ;; Check if response is valid
+          (cond
+            (nil? response)
+            (do
+              (log/error "Received nil response from Anthropic API")
+              (async/>!! output-ch (streaming/stream-error "anthropic" "Received nil response"))
+              (streaming/close-stream! output-ch))
+            
+            (and (:status response) (>= (:status response) 400))
+            (do
+              (log/error "HTTP error from Anthropic" {:status (:status response)})
+              (async/>!! output-ch (streaming/stream-error "anthropic" 
+                                                           (str "HTTP " (:status response))
+                                                           :status (:status response)))
+              (streaming/close-stream! output-ch))
+            
+            ;; Process streaming response (200 status)
+            :else
+            (let [body (:body response)]
+              (if (nil? body)
+                (do
+                  (log/error "Response body is nil")
+                  (async/>!! output-ch (streaming/stream-error "anthropic" "Response body is nil"))
+                  (streaming/close-stream! output-ch))
+                
+                (let [reader (java.io.BufferedReader. 
+                              (java.io.InputStreamReader. body "UTF-8"))]
+                  (try
+                    (log/debug "Starting to read SSE stream")
+                    (loop [chunk-count 0]
+                      (if-let [line (.readLine reader)]
+                        (do
+                          (when (str/starts-with? line "data: ")
+                            (let [data (subs line 6)]
+                              (when-not (= data "[DONE]")
+                                (try
+                                  (let [parsed (json/decode data true)
+                                        transformed (core/transform-streaming-chunk :anthropic parsed)]
+                                    (when transformed
+                                      (async/>!! output-ch transformed)
+                                      (log/debug "Sent chunk" {:chunk-number (inc chunk-count)})))
+                                  (catch Exception e
+                                    (log/warn "Failed to parse SSE line" {:line line :error (or (.getMessage e) (str e))}))))))
+                          (recur (inc chunk-count)))
+                        (log/debug "Stream ended" {:total-chunks chunk-count})))
+                    (finally
+                      (.close reader)
+                      (streaming/close-stream! output-ch)
+                      (log/debug "Closed reader and output channel"))))))))
+        
+        (catch Exception e
+          (log/error "Error in streaming request" 
+                     {:error (or (.getMessage e) (str e))
+                      :error-class (class e)
+                      :stack-trace (take 5 (.getStackTrace e))})
+          (async/>!! output-ch (streaming/stream-error "anthropic" (or (.getMessage e) (str "Exception: " (class e)))))
+          (streaming/close-stream! output-ch))))
+    
+    output-ch))
 
 ;; ============================================================================
 ;; Utility Functions

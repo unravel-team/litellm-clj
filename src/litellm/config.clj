@@ -6,8 +6,8 @@
 ;; Configuration Registry
 ;; ============================================================================
 
-(defonce ^:private config-registry
-  "Global registry for provider configurations"
+;; "Global registry for provider configurations"
+(defonce config-registry
   (atom {}))
 
 (defn register!

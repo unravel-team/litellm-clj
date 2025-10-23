@@ -126,11 +126,12 @@
    "meta-llama/llama-3-8b-instruct" {:input 0.0000001 :output 0.0000001}})
 
 ;; ============================================================================
-;; OpenRouter Provider Multimethod Implementations
+;; OpenRouter Provider Implementation Functions
 ;; ============================================================================
 
-(defmethod core/transform-request :openrouter
-  [_ request config]
+(defn transform-request-impl
+  "OpenRouter-specific transform-request implementation"
+  [provider-name request config]
   (let [model (:model request)
         transformed {:model model
                     :messages (transform-messages (:messages request))
@@ -147,8 +148,9 @@
       (:tools request) (assoc :tools (transform-tools (:tools request)))
       (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request))))))
 
-(defmethod core/make-request :openrouter
-  [_ transformed-request thread-pools telemetry config]
+(defn make-request-impl
+  "OpenRouter-specific make-request implementation"
+  [provider-name transformed-request thread-pools telemetry config]
   (let [url (str (:api-base config "https://openrouter.ai/api/v1") "/chat/completions")]
     (cp/future (:api-calls thread-pools)
       (let [start-time (System/currentTimeMillis)
@@ -169,8 +171,9 @@
         
         response))))
 
-(defmethod core/transform-response :openrouter
-  [_ response]
+(defn transform-response-impl
+  "OpenRouter-specific transform-response implementation"
+  [provider-name response]
   (let [body (:body response)]
     {:id (:id body)
      :object (:object body)
@@ -179,16 +182,25 @@
      :choices (map transform-choice (:choices body))
      :usage (transform-usage (:usage body))}))
 
-(defmethod core/supports-streaming? :openrouter [_] true)
+(defn supports-streaming-impl
+  "OpenRouter-specific supports-streaming? implementation"
+  [provider-name]
+  true)
 
-(defmethod core/supports-function-calling? :openrouter [_] true)
+(defn supports-function-calling-impl
+  "OpenRouter-specific supports-function-calling? implementation"
+  [provider-name]
+  true)
 
-(defmethod core/get-rate-limits :openrouter [_]
+(defn get-rate-limits-impl
+  "OpenRouter-specific get-rate-limits implementation"
+  [provider-name]
   {:requests-per-minute 3500
    :tokens-per-minute 90000})
 
-(defmethod core/health-check :openrouter
-  [_ thread-pools config]
+(defn health-check-impl
+  "OpenRouter-specific health-check implementation"
+  [provider-name thread-pools config]
   (cp/future (:health-checks thread-pools)
     (try
       (let [response (http/get (str (:api-base config "https://openrouter.ai/api/v1") "/models")
@@ -199,8 +211,9 @@
         (log/warn "OpenRouter health check failed" {:error (.getMessage e)})
         false))))
 
-(defmethod core/get-cost-per-token :openrouter
-  [_ model]
+(defn get-cost-per-token-impl
+  "OpenRouter-specific get-cost-per-token implementation"
+  [provider-name model]
   (get default-cost-map model {:input 0.0 :output 0.0}))
 
 ;; ============================================================================

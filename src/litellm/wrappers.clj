@@ -33,19 +33,21 @@
                        :errors errors}))
       
       ;; Try next config
-      (let [config-name (first remaining)]
-        (try
-          (log/info "Attempting with config" {:config config-name})
-          (completion-fn config-name request-map)
-          
-          (catch Exception e
-            (log/warn "Config failed, trying fallback"
-                      {:config config-name
-                       :error (.getMessage e)
-                       :remaining (rest remaining)})
-            (recur (rest remaining)
-                   (conj errors {:config config-name
-                                :error (.getMessage e)}))))))))
+      (let [config-name (first remaining)
+            result (try
+                     (log/info "Attempting with config" {:config config-name})
+                     {:success true :result (completion-fn config-name request-map)}
+                     (catch Exception e
+                       (log/warn "Config failed, trying fallback"
+                                 {:config config-name
+                                  :error (.getMessage e)
+                                  :remaining (rest remaining)})
+                       {:success false :error e}))]
+        (if (:success result)
+          (:result result)
+          (recur (rest remaining)
+                 (conj errors {:config config-name
+                              :error (.getMessage (:error result))})))))))
 
 ;; ============================================================================
 ;; Retry Support
@@ -82,19 +84,21 @@
               retry-on (constantly true)}} opts]
     
     (loop [attempt 1]
-      (try
-        (log/debug "Attempt" {:attempt attempt :max-attempts max-attempts})
-        (completion-fn config-name request-map)
-        
-        (catch Exception e
+      (let [result (try
+                     (log/debug "Attempt" {:attempt attempt :max-attempts max-attempts})
+                     {:success true :result (completion-fn config-name request-map)}
+                     (catch Exception e
+                       {:success false :error e}))]
+        (if (:success result)
+          (:result result)
           (if (and (< attempt max-attempts)
-                   (retry-on e))
+                   (retry-on (:error result)))
             (let [delay-ms (exponential-backoff attempt backoff-ms max-backoff-ms)]
               (log/warn "Request failed, retrying"
                         {:attempt attempt
                          :max-attempts max-attempts
                          :delay-ms delay-ms
-                         :error (.getMessage e)})
+                         :error (.getMessage (:error result))})
               (Thread/sleep delay-ms)
               (recur (inc attempt)))
             
@@ -102,8 +106,8 @@
             (do
               (log/error "Request failed after retries"
                          {:attempts attempt
-                          :error (.getMessage e)})
-              (throw e))))))))
+                          :error (.getMessage (:error result))})
+              (throw (:error result)))))))))
 
 ;; ============================================================================
 ;; Timeout Support
@@ -138,20 +142,23 @@
                             (catch Exception e
                               (deliver result-promise
                                       {:success false
-                                       :error e}))))]
+                                       :error e}))))
+          result (deref result-promise timeout-ms ::timeout)]
       
       ;; Wait for result with timeout
-      (let [result (deref result-promise timeout-ms ::timeout)]
-        (if (= result ::timeout)
-          (do
-            (future-cancel result-future)
-            (throw (ex-info "Request timed out"
-                            {:timeout-ms timeout-ms
-                             :config-name config-name})))
-          
-          (if (:success result)
-            (:result result)
-            (throw (:error result))))))))
+      (cond
+        (= result ::timeout)
+        (do
+          (future-cancel result-future)
+          (throw (ex-info "Request timed out"
+                          {:timeout-ms timeout-ms
+                           :config-name config-name})))
+        
+        (:success result)
+        (:result result)
+        
+        :else
+        (throw (:error result))))))
 
 ;; ============================================================================
 ;; Cost Tracking Support
