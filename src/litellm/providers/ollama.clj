@@ -1,7 +1,6 @@
 (ns litellm.providers.ollama
   "Ollama provider implementation for LiteLLM"
-  (:require [litellm.providers.core :as core]
-            [hato.client :as http]
+  (:require [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
@@ -119,12 +118,22 @@
 ;; Ollama Provider Implementation Functions
 ;; ============================================================================
 
+(defn extract-model-name
+  "Extract actual model name from model string"
+  [model]
+  (if (string? model)
+    (let [parts (str/split model #"/")]
+      (if (> (count parts) 1)
+        (str/join "/" (rest parts))
+        model))
+    (str model)))
+
 (defn transform-request-impl
   "Ollama-specific transform-request implementation"
   [provider-name request config]
   (let [original-model (:model request)
         is-chat (str/starts-with? original-model "ollama_chat/")
-        model (core/extract-model-name original-model)
+        model (extract-model-name original-model)
         actual-model (if is-chat 
                        (if (str/starts-with? original-model "ollama_chat/")
                          (subs original-model (count "ollama_chat/"))
@@ -286,10 +295,10 @@
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
-      (let [transformed (core/transform-request provider test-request)
-            response-future (core/make-request provider transformed thread-pools telemetry)
+      (let [transformed (transform-request-impl :ollama test-request provider)
+            response-future (make-request-impl :ollama transformed thread-pools telemetry provider)
             response @response-future
-            standard-response (core/transform-response provider response)]
+            standard-response (transform-response-impl :ollama response)]
         {:success true
          :provider "ollama"
          :model "llama2"

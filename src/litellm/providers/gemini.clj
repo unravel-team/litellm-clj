@@ -1,7 +1,6 @@
 (ns litellm.providers.gemini
   "Google Gemini provider implementation for LiteLLM"
-  (:require [litellm.providers.core :as core]
-            [litellm.streaming :as streaming]
+  (:require [litellm.streaming :as streaming]
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
@@ -349,7 +348,7 @@
                   (when (seq (str/trim line))
                     (try
                       (let [parsed (json/decode line true)
-                            transformed (core/transform-streaming-chunk :gemini parsed)]
+                            transformed (transform-streaming-chunk-impl :gemini parsed)]
                         (>! output-ch transformed))
                       (catch Exception e
                         (log/debug "Failed to parse Gemini streaming chunk" {:line line :error (.getMessage e)}))))
@@ -410,10 +409,10 @@
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
-      (let [transformed (core/transform-request provider test-request)
-            response-future (core/make-request provider transformed thread-pools telemetry)
+      (let [transformed (transform-request-impl :gemini test-request provider)
+            response-future (make-request-impl :gemini transformed thread-pools telemetry provider)
             response @response-future
-            standard-response (core/transform-response provider response)]
+            standard-response (transform-response-impl :gemini response)]
         {:success true
          :provider "gemini"
          :model "gemini-1.5-flash-latest"

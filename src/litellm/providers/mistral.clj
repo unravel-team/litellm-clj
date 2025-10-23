@@ -1,7 +1,6 @@
 (ns litellm.providers.mistral
   "Mistral AI provider implementation for LiteLLM"
-  (:require [litellm.providers.core :as core]
-            [hato.client :as http]
+  (:require [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
@@ -371,10 +370,10 @@
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
-      (let [transformed (core/transform-request provider test-request)
-            response-future (core/make-request provider transformed thread-pools telemetry)
+      (let [transformed (transform-request-impl :mistral test-request provider)
+            response-future (make-request-impl :mistral transformed thread-pools telemetry provider)
             response @response-future
-            standard-response (core/transform-response provider response)]
+            standard-response (transform-response-impl :mistral response)]
         {:success true
          :provider "mistral"
          :model "mistral-small-latest"

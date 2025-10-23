@@ -1,7 +1,6 @@
 (ns litellm.providers.anthropic
   "Anthropic provider implementation for LiteLLM"
-  (:require [litellm.providers.core :as core]
-            [litellm.streaming :as streaming]
+  (:require [litellm.streaming :as streaming]
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
@@ -114,10 +113,20 @@
 ;; Anthropic Provider Implementation Functions
 ;; ============================================================================
 
+(defn extract-model-name
+  "Extract actual model name from model string"
+  [model]
+  (if (string? model)
+    (let [parts (str/split model #"/")]
+      (if (> (count parts) 1)
+        (str/join "/" (rest parts))
+        model))
+    (str model)))
+
 (defn transform-request-impl
   "Anthropic-specific transform-request implementation"
   [provider-name request config]
-  (let [model (core/extract-model-name (:model request))
+  (let [model (extract-model-name (:model request))
         mapped-model (get (:model-mapping config default-model-mapping) model model)
         messages-data (transform-messages (:messages request))
         transformed {:model mapped-model
@@ -282,7 +291,7 @@
                               (when-not (= data "[DONE]")
                                 (try
                                   (let [parsed (json/decode data true)
-                                        transformed (core/transform-streaming-chunk :anthropic parsed)]
+                                        transformed (transform-streaming-chunk-impl :anthropic parsed)]
                                     (when transformed
                                       (async/>!! output-ch transformed)
                                       (log/debug "Sent chunk" {:chunk-number (inc chunk-count)})))
@@ -348,10 +357,10 @@
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
-      (let [transformed (core/transform-request provider test-request)
-            response-future (core/make-request provider transformed thread-pools telemetry)
+      (let [transformed (transform-request-impl :anthropic test-request provider)
+            response-future (make-request-impl :anthropic transformed thread-pools telemetry provider)
             response @response-future
-            standard-response (core/transform-response provider response)]
+            standard-response (transform-response-impl :anthropic response)]
         {:success true
          :provider "anthropic"
          :model "claude-3-haiku"

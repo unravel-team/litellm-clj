@@ -2,296 +2,260 @@
   "Core provider protocol and utilities for LiteLLM"
   (:require [clojure.string :as str]
             [clojure.tools.logging :as log]
-            [litellm.schemas :as schemas]))
-
-;; Provider implementation namespaces are required lazily to avoid circular dependencies
-;; They will be loaded when the stub methods are first called
+            [litellm.schemas :as schemas]
+            [litellm.providers.openai :as openai]
+            [litellm.providers.anthropic :as anthropic]
+            [litellm.providers.gemini :as gemini]
+            [litellm.providers.mistral :as mistral]
+            [litellm.providers.ollama :as ollama]
+            [litellm.providers.openrouter :as openrouter]))
 
 ;; ============================================================================
-;; Provider Multimethods
+;; Provider Multimethods and Implementations
 ;; ============================================================================
+
+;; transform-request
+;; ----------------------------------------------------------------------------
 
 (defmulti transform-request
   "Transform a standard request to provider-specific format"
   (fn [provider-name request config] provider-name))
 
+(defmethod transform-request :openai [provider-name request config]
+  (openai/transform-request-impl provider-name request config))
+
+(defmethod transform-request :anthropic [provider-name request config]
+  (anthropic/transform-request-impl provider-name request config))
+
+(defmethod transform-request :gemini [provider-name request config]
+  (gemini/transform-request-impl provider-name request config))
+
+(defmethod transform-request :mistral [provider-name request config]
+  (mistral/transform-request-impl provider-name request config))
+
+(defmethod transform-request :ollama [provider-name request config]
+  (ollama/transform-request-impl provider-name request config))
+
+(defmethod transform-request :openrouter [provider-name request config]
+  (openrouter/transform-request-impl provider-name request config))
+
+;; make-request
+;; ----------------------------------------------------------------------------
+
 (defmulti make-request
   "Make HTTP request to provider API, returns a future"
   (fn [provider-name transformed-request thread-pools telemetry config] provider-name))
+
+(defmethod make-request :openai [provider-name transformed-request thread-pools telemetry config]
+  (openai/make-request-impl provider-name transformed-request thread-pools telemetry config))
+
+(defmethod make-request :anthropic [provider-name transformed-request thread-pools telemetry config]
+  (anthropic/make-request-impl provider-name transformed-request thread-pools telemetry config))
+
+(defmethod make-request :gemini [provider-name transformed-request thread-pools telemetry config]
+  (gemini/make-request-impl provider-name transformed-request thread-pools telemetry config))
+
+(defmethod make-request :mistral [provider-name transformed-request thread-pools telemetry config]
+  (mistral/make-request-impl provider-name transformed-request thread-pools telemetry config))
+
+(defmethod make-request :ollama [provider-name transformed-request thread-pools telemetry config]
+  (ollama/make-request-impl provider-name transformed-request thread-pools telemetry config))
+
+(defmethod make-request :openrouter [provider-name transformed-request thread-pools telemetry config]
+  (openrouter/make-request-impl provider-name transformed-request thread-pools telemetry config))
+
+;; make-streaming-request
+;; ----------------------------------------------------------------------------
 
 (defmulti make-streaming-request
   "Make streaming HTTP request to provider API, returns a core.async channel"
   (fn [provider-name transformed-request thread-pools config] provider-name))
 
+(defmethod make-streaming-request :openai [provider-name transformed-request thread-pools config]
+  (openai/make-streaming-request-impl provider-name transformed-request thread-pools config))
+
+(defmethod make-streaming-request :anthropic [provider-name transformed-request thread-pools config]
+  (anthropic/make-streaming-request-impl provider-name transformed-request thread-pools config))
+
+(defmethod make-streaming-request :gemini [provider-name transformed-request thread-pools config]
+  (gemini/make-streaming-request-impl provider-name transformed-request thread-pools config))
+
+;; transform-response
+;; ----------------------------------------------------------------------------
+
 (defmulti transform-response
   "Transform provider response to standard format"
   (fn [provider-name response] provider-name))
+
+(defmethod transform-response :openai [provider-name response]
+  (openai/transform-response-impl provider-name response))
+
+(defmethod transform-response :anthropic [provider-name response]
+  (anthropic/transform-response-impl provider-name response))
+
+(defmethod transform-response :gemini [provider-name response]
+  (gemini/transform-response-impl provider-name response))
+
+(defmethod transform-response :mistral [provider-name response]
+  (mistral/transform-response-impl provider-name response))
+
+(defmethod transform-response :ollama [provider-name response]
+  (ollama/transform-response-impl provider-name response))
+
+(defmethod transform-response :openrouter [provider-name response]
+  (openrouter/transform-response-impl provider-name response))
+
+;; transform-streaming-chunk
+;; ----------------------------------------------------------------------------
 
 (defmulti transform-streaming-chunk
   "Transform provider streaming chunk to standard format"
   (fn [provider-name chunk] provider-name))
 
+(defmethod transform-streaming-chunk :openai [provider-name chunk]
+  (openai/transform-streaming-chunk-impl provider-name chunk))
+
+(defmethod transform-streaming-chunk :anthropic [provider-name chunk]
+  (anthropic/transform-streaming-chunk-impl provider-name chunk))
+
+(defmethod transform-streaming-chunk :gemini [provider-name chunk]
+  (gemini/transform-streaming-chunk-impl provider-name chunk))
+
+;; supports-streaming?
+;; ----------------------------------------------------------------------------
+
 (defmulti supports-streaming?
   "Check if provider supports streaming responses"
   identity)
+
+(defmethod supports-streaming? :default [_] false)
+
+(defmethod supports-streaming? :openai [provider-name]
+  (openai/supports-streaming-impl provider-name))
+
+(defmethod supports-streaming? :anthropic [provider-name]
+  (anthropic/supports-streaming-impl provider-name))
+
+(defmethod supports-streaming? :gemini [provider-name]
+  (gemini/supports-streaming-impl provider-name))
+
+(defmethod supports-streaming? :mistral [provider-name]
+  (mistral/supports-streaming-impl provider-name))
+
+(defmethod supports-streaming? :ollama [provider-name]
+  (ollama/supports-streaming-impl provider-name))
+
+(defmethod supports-streaming? :openrouter [provider-name]
+  (openrouter/supports-streaming-impl provider-name))
+
+;; supports-function-calling?
+;; ----------------------------------------------------------------------------
 
 (defmulti supports-function-calling?
   "Check if provider supports function calling"
   identity)
 
+(defmethod supports-function-calling? :default [_] false)
+
+(defmethod supports-function-calling? :openai [provider-name]
+  (openai/supports-function-calling-impl provider-name))
+
+(defmethod supports-function-calling? :anthropic [provider-name]
+  (anthropic/supports-function-calling-impl provider-name))
+
+(defmethod supports-function-calling? :gemini [provider-name]
+  (gemini/supports-function-calling-impl provider-name))
+
+(defmethod supports-function-calling? :mistral [provider-name]
+  (mistral/supports-function-calling-impl provider-name))
+
+(defmethod supports-function-calling? :ollama [provider-name]
+  (ollama/supports-function-calling-impl provider-name))
+
+(defmethod supports-function-calling? :openrouter [provider-name]
+  (openrouter/supports-function-calling-impl provider-name))
+
+;; get-rate-limits
+;; ----------------------------------------------------------------------------
+
 (defmulti get-rate-limits
   "Get provider rate limits as a map"
   identity)
+
+(defmethod get-rate-limits :default [_]
+  {:requests-per-minute 1000
+   :tokens-per-minute 50000})
+
+(defmethod get-rate-limits :openai [provider-name]
+  (openai/get-rate-limits-impl provider-name))
+
+(defmethod get-rate-limits :anthropic [provider-name]
+  (anthropic/get-rate-limits-impl provider-name))
+
+(defmethod get-rate-limits :gemini [provider-name]
+  (gemini/get-rate-limits-impl provider-name))
+
+(defmethod get-rate-limits :mistral [provider-name]
+  (mistral/get-rate-limits-impl provider-name))
+
+(defmethod get-rate-limits :ollama [provider-name]
+  (ollama/get-rate-limits-impl provider-name))
+
+(defmethod get-rate-limits :openrouter [provider-name]
+  (openrouter/get-rate-limits-impl provider-name))
+
+;; health-check
+;; ----------------------------------------------------------------------------
 
 (defmulti health-check
   "Perform health check, returns a future with boolean result"
   (fn [provider-name thread-pools config] provider-name))
 
+(defmethod health-check :openai [provider-name thread-pools config]
+  (openai/health-check-impl provider-name thread-pools config))
+
+(defmethod health-check :anthropic [provider-name thread-pools config]
+  (anthropic/health-check-impl provider-name thread-pools config))
+
+(defmethod health-check :gemini [provider-name thread-pools config]
+  (gemini/health-check-impl provider-name thread-pools config))
+
+(defmethod health-check :mistral [provider-name thread-pools config]
+  (mistral/health-check-impl provider-name thread-pools config))
+
+(defmethod health-check :ollama [provider-name thread-pools config]
+  (ollama/health-check-impl provider-name thread-pools config))
+
+(defmethod health-check :openrouter [provider-name thread-pools config]
+  (openrouter/health-check-impl provider-name thread-pools config))
+
+;; get-cost-per-token
+;; ----------------------------------------------------------------------------
+
 (defmulti get-cost-per-token
   "Get cost per token for a specific model"
   (fn [provider-name model] provider-name))
 
-;; ============================================================================
-;; Default Implementations
-;; ============================================================================
-
-(defmethod supports-streaming? :default [_] false)
-(defmethod supports-function-calling? :default [_] false)
-(defmethod get-rate-limits :default [_]
-  {:requests-per-minute 1000
-   :tokens-per-minute 50000})
 (defmethod get-cost-per-token :default [_ _]
   {:input 0.0 :output 0.0})
 
-;; ============================================================================
-;; Provider Stub Implementations (for jump-to-definition)
-;; ============================================================================
-;; These stub methods forward to the actual implementation functions in each
-;; provider namespace. This allows developers to jump-to-definition from this
-;; file to see which providers have implementations, and then to the actual
-;; implementation code.
-
-;; OpenAI Provider Stubs
-(defmethod transform-request :openai [provider-name request config]
-  (require 'litellm.providers.openai)
-  ((resolve 'litellm.providers.openai/transform-request-impl) provider-name request config))
-
-(defmethod make-request :openai [provider-name transformed-request thread-pools telemetry config]
-  (require 'litellm.providers.openai)
-  ((resolve 'litellm.providers.openai/make-request-impl) provider-name transformed-request thread-pools telemetry config))
-
-(defmethod transform-response :openai [provider-name response]
-  (require 'litellm.providers.openai)
-  ((resolve 'litellm.providers.openai/transform-response-impl) provider-name response))
-
-(defmethod supports-streaming? :openai [provider-name]
-  (require 'litellm.providers.openai)
-  ((resolve 'litellm.providers.openai/supports-streaming-impl) provider-name))
-
-(defmethod supports-function-calling? :openai [provider-name]
-  (require 'litellm.providers.openai)
-  ((resolve 'litellm.providers.openai/supports-function-calling-impl) provider-name))
-
-(defmethod get-rate-limits :openai [provider-name]
-  (require 'litellm.providers.openai)
-  ((resolve 'litellm.providers.openai/get-rate-limits-impl) provider-name))
-
-(defmethod health-check :openai [provider-name thread-pools config]
-  (require 'litellm.providers.openai)
-  ((resolve 'litellm.providers.openai/health-check-impl) provider-name thread-pools config))
-
 (defmethod get-cost-per-token :openai [provider-name model]
-  (require 'litellm.providers.openai)
-  ((resolve 'litellm.providers.openai/get-cost-per-token-impl) provider-name model))
-
-(defmethod transform-streaming-chunk :openai [provider-name chunk]
-  (require 'litellm.providers.openai)
-  ((resolve 'litellm.providers.openai/transform-streaming-chunk-impl) provider-name chunk))
-
-(defmethod make-streaming-request :openai [provider-name transformed-request thread-pools config]
-  (require 'litellm.providers.openai)
-  ((resolve 'litellm.providers.openai/make-streaming-request-impl) provider-name transformed-request thread-pools config))
-
-;; Anthropic Provider Stubs
-(defmethod transform-request :anthropic [provider-name request config]
-  (require 'litellm.providers.anthropic)
-  ((resolve 'litellm.providers.anthropic/transform-request-impl) provider-name request config))
-
-(defmethod make-request :anthropic [provider-name transformed-request thread-pools telemetry config]
-  (require 'litellm.providers.anthropic)
-  ((resolve 'litellm.providers.anthropic/make-request-impl) provider-name transformed-request thread-pools telemetry config))
-
-(defmethod transform-response :anthropic [provider-name response]
-  (require 'litellm.providers.anthropic)
-  ((resolve 'litellm.providers.anthropic/transform-response-impl) provider-name response))
-
-(defmethod supports-streaming? :anthropic [provider-name]
-  (require 'litellm.providers.anthropic)
-  ((resolve 'litellm.providers.anthropic/supports-streaming-impl) provider-name))
-
-(defmethod supports-function-calling? :anthropic [provider-name]
-  (require 'litellm.providers.anthropic)
-  ((resolve 'litellm.providers.anthropic/supports-function-calling-impl) provider-name))
-
-(defmethod get-rate-limits :anthropic [provider-name]
-  (require 'litellm.providers.anthropic)
-  ((resolve 'litellm.providers.anthropic/get-rate-limits-impl) provider-name))
-
-(defmethod health-check :anthropic [provider-name thread-pools config]
-  (require 'litellm.providers.anthropic)
-  ((resolve 'litellm.providers.anthropic/health-check-impl) provider-name thread-pools config))
+  (openai/get-cost-per-token-impl provider-name model))
 
 (defmethod get-cost-per-token :anthropic [provider-name model]
-  (require 'litellm.providers.anthropic)
-  ((resolve 'litellm.providers.anthropic/get-cost-per-token-impl) provider-name model))
-
-(defmethod transform-streaming-chunk :anthropic [provider-name chunk]
-  (require 'litellm.providers.anthropic)
-  ((resolve 'litellm.providers.anthropic/transform-streaming-chunk-impl) provider-name chunk))
-
-(defmethod make-streaming-request :anthropic [provider-name transformed-request thread-pools config]
-  (require 'litellm.providers.anthropic)
-  ((resolve 'litellm.providers.anthropic/make-streaming-request-impl) provider-name transformed-request thread-pools config))
-
-;; Gemini Provider Stubs
-(defmethod transform-request :gemini [provider-name request config]
-  (require 'litellm.providers.gemini)
-  ((resolve 'litellm.providers.gemini/transform-request-impl) provider-name request config))
-
-(defmethod make-request :gemini [provider-name transformed-request thread-pools telemetry config]
-  (require 'litellm.providers.gemini)
-  ((resolve 'litellm.providers.gemini/make-request-impl) provider-name transformed-request thread-pools telemetry config))
-
-(defmethod transform-response :gemini [provider-name response]
-  (require 'litellm.providers.gemini)
-  ((resolve 'litellm.providers.gemini/transform-response-impl) provider-name response))
-
-(defmethod supports-streaming? :gemini [provider-name]
-  (require 'litellm.providers.gemini)
-  ((resolve 'litellm.providers.gemini/supports-streaming-impl) provider-name))
-
-(defmethod supports-function-calling? :gemini [provider-name]
-  (require 'litellm.providers.gemini)
-  ((resolve 'litellm.providers.gemini/supports-function-calling-impl) provider-name))
-
-(defmethod get-rate-limits :gemini [provider-name]
-  (require 'litellm.providers.gemini)
-  ((resolve 'litellm.providers.gemini/get-rate-limits-impl) provider-name))
-
-(defmethod health-check :gemini [provider-name thread-pools config]
-  (require 'litellm.providers.gemini)
-  ((resolve 'litellm.providers.gemini/health-check-impl) provider-name thread-pools config))
+  (anthropic/get-cost-per-token-impl provider-name model))
 
 (defmethod get-cost-per-token :gemini [provider-name model]
-  (require 'litellm.providers.gemini)
-  ((resolve 'litellm.providers.gemini/get-cost-per-token-impl) provider-name model))
-
-(defmethod transform-streaming-chunk :gemini [provider-name chunk]
-  (require 'litellm.providers.gemini)
-  ((resolve 'litellm.providers.gemini/transform-streaming-chunk-impl) provider-name chunk))
-
-(defmethod make-streaming-request :gemini [provider-name transformed-request thread-pools config]
-  (require 'litellm.providers.gemini)
-  ((resolve 'litellm.providers.gemini/make-streaming-request-impl) provider-name transformed-request thread-pools config))
-
-;; Mistral Provider Stubs
-(defmethod transform-request :mistral [provider-name request config]
-  (require 'litellm.providers.mistral)
-  ((resolve 'litellm.providers.mistral/transform-request-impl) provider-name request config))
-
-(defmethod make-request :mistral [provider-name transformed-request thread-pools telemetry config]
-  (require 'litellm.providers.mistral)
-  ((resolve 'litellm.providers.mistral/make-request-impl) provider-name transformed-request thread-pools telemetry config))
-
-(defmethod transform-response :mistral [provider-name response]
-  (require 'litellm.providers.mistral)
-  ((resolve 'litellm.providers.mistral/transform-response-impl) provider-name response))
-
-(defmethod supports-streaming? :mistral [provider-name]
-  (require 'litellm.providers.mistral)
-  ((resolve 'litellm.providers.mistral/supports-streaming-impl) provider-name))
-
-(defmethod supports-function-calling? :mistral [provider-name]
-  (require 'litellm.providers.mistral)
-  ((resolve 'litellm.providers.mistral/supports-function-calling-impl) provider-name))
-
-(defmethod get-rate-limits :mistral [provider-name]
-  (require 'litellm.providers.mistral)
-  ((resolve 'litellm.providers.mistral/get-rate-limits-impl) provider-name))
-
-(defmethod health-check :mistral [provider-name thread-pools config]
-  (require 'litellm.providers.mistral)
-  ((resolve 'litellm.providers.mistral/health-check-impl) provider-name thread-pools config))
+  (gemini/get-cost-per-token-impl provider-name model))
 
 (defmethod get-cost-per-token :mistral [provider-name model]
-  (require 'litellm.providers.mistral)
-  ((resolve 'litellm.providers.mistral/get-cost-per-token-impl) provider-name model))
-
-;; Ollama Provider Stubs
-(defmethod transform-request :ollama [provider-name request config]
-  (require 'litellm.providers.ollama)
-  ((resolve 'litellm.providers.ollama/transform-request-impl) provider-name request config))
-
-(defmethod make-request :ollama [provider-name transformed-request thread-pools telemetry config]
-  (require 'litellm.providers.ollama)
-  ((resolve 'litellm.providers.ollama/make-request-impl) provider-name transformed-request thread-pools telemetry config))
-
-(defmethod transform-response :ollama [provider-name response]
-  (require 'litellm.providers.ollama)
-  ((resolve 'litellm.providers.ollama/transform-response-impl) provider-name response))
-
-(defmethod supports-streaming? :ollama [provider-name]
-  (require 'litellm.providers.ollama)
-  ((resolve 'litellm.providers.ollama/supports-streaming-impl) provider-name))
-
-(defmethod supports-function-calling? :ollama [provider-name]
-  (require 'litellm.providers.ollama)
-  ((resolve 'litellm.providers.ollama/supports-function-calling-impl) provider-name))
-
-(defmethod get-rate-limits :ollama [provider-name]
-  (require 'litellm.providers.ollama)
-  ((resolve 'litellm.providers.ollama/get-rate-limits-impl) provider-name))
-
-(defmethod health-check :ollama [provider-name thread-pools config]
-  (require 'litellm.providers.ollama)
-  ((resolve 'litellm.providers.ollama/health-check-impl) provider-name thread-pools config))
+  (mistral/get-cost-per-token-impl provider-name model))
 
 (defmethod get-cost-per-token :ollama [provider-name model]
-  (require 'litellm.providers.ollama)
-  ((resolve 'litellm.providers.ollama/get-cost-per-token-impl) provider-name model))
-
-;; OpenRouter Provider Stubs
-(defmethod transform-request :openrouter [provider-name request config]
-  (require 'litellm.providers.openrouter)
-  ((resolve 'litellm.providers.openrouter/transform-request-impl) provider-name request config))
-
-(defmethod make-request :openrouter [provider-name transformed-request thread-pools telemetry config]
-  (require 'litellm.providers.openrouter)
-  ((resolve 'litellm.providers.openrouter/make-request-impl) provider-name transformed-request thread-pools telemetry config))
-
-(defmethod transform-response :openrouter [provider-name response]
-  (require 'litellm.providers.openrouter)
-  ((resolve 'litellm.providers.openrouter/transform-response-impl) provider-name response))
-
-(defmethod supports-streaming? :openrouter [provider-name]
-  (require 'litellm.providers.openrouter)
-  ((resolve 'litellm.providers.openrouter/supports-streaming-impl) provider-name))
-
-(defmethod supports-function-calling? :openrouter [provider-name]
-  (require 'litellm.providers.openrouter)
-  ((resolve 'litellm.providers.openrouter/supports-function-calling-impl) provider-name))
-
-(defmethod get-rate-limits :openrouter [provider-name]
-  (require 'litellm.providers.openrouter)
-  ((resolve 'litellm.providers.openrouter/get-rate-limits-impl) provider-name))
-
-(defmethod health-check :openrouter [provider-name thread-pools config]
-  (require 'litellm.providers.openrouter)
-  ((resolve 'litellm.providers.openrouter/health-check-impl) provider-name thread-pools config))
+  (ollama/get-cost-per-token-impl provider-name model))
 
 (defmethod get-cost-per-token :openrouter [provider-name model]
-  (require 'litellm.providers.openrouter)
-  ((resolve 'litellm.providers.openrouter/get-cost-per-token-impl) provider-name model))
+  (openrouter/get-cost-per-token-impl provider-name model))
 
 ;; ============================================================================
 ;; Provider Validation
