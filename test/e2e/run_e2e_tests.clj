@@ -195,7 +195,7 @@
                  (test-provider :anthropic "claude-3-haiku-20240307" "ANTHROPIC_API_KEY" true true)
                  (test-provider :gemini "gemini-2.5-flash-lite" "GEMINI_API_KEY" true true)
                  (test-provider :mistral "mistral-small-latest" "MISTRAL_API_KEY" false true)
-                 (test-provider :openrouter "openai/gpt-3.5-turbo" "OPENROUTER_API_KEY" false false)
+                 (test-provider :openrouter "openai/gpt-3.5-turbo" "OPENROUTER_API_KEY" false true)
                  (test-ollama)]
         
         passed (count (filter #(= :passed (:status %)) results))

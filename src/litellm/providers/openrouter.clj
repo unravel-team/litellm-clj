@@ -1,9 +1,11 @@
 (ns litellm.providers.openrouter
   "OpenRouter provider implementation for LiteLLM"
-  (:require [hato.client :as http]
+  (:require [litellm.streaming :as streaming]
+            [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
+            [clojure.core.async :as async :refer [go >!]]
             [com.climate.claypoole :as cp]))
 
 ;; ============================================================================
@@ -184,7 +186,7 @@
 (defn supports-streaming-impl
   "OpenRouter-specific supports-streaming? implementation"
   [provider-name]
-  false)
+  true)
 
 (defn supports-function-calling-impl
   "OpenRouter-specific supports-function-calling? implementation"
@@ -246,14 +248,65 @@
                :finish-reason (when (:finish_reason choice)
                                (keyword (:finish_reason choice)))}]}))
 
-(defn handle-streaming-response
-  "Handle streaming response from OpenRouter"
-  [response callback]
-  (let [body (:body response)]
-    (doseq [line (str/split-lines body)]
-      (when-let [parsed (parse-sse-line line)]
-        (let [transformed (transform-streaming-chunk parsed)]
-          (callback transformed))))))
+(defn transform-streaming-chunk-impl
+  "OpenRouter-specific transform-streaming-chunk implementation"
+  [provider-name chunk]
+  (let [choice (first (:choices chunk))
+        delta (:delta choice)]
+    {:id (:id chunk)
+     :object (:object chunk)
+     :created (:created chunk)
+     :model (:model chunk)
+     :choices [{:index (:index choice)
+               :delta {:role (keyword (:role delta))
+                      :content (:content delta)}
+               :finish-reason (when (:finish_reason choice)
+                               (keyword (:finish_reason choice)))}]}))
+
+(defn make-streaming-request-impl
+  "OpenRouter-specific make-streaming-request implementation"
+  [provider-name transformed-request thread-pools config]
+  (let [url (str (:api-base config "https://openrouter.ai/api/v1") "/chat/completions")
+        output-ch (streaming/create-stream-channel)]
+    (go
+      (try
+        (let [response (http/post url
+                                  {:headers {"Authorization" (str "Bearer " (:api-key config))
+                                             "HTTP-Referer" "https://github.com/unravel-team/litellm-clj"
+                                             "X-Title" "litellm-clj"
+                                             "Content-Type" "application/json"
+                                             "User-Agent" "litellm-clj/1.0.0"}
+                                   :body (json/encode transformed-request)
+                                   :timeout (:timeout config 30000)
+                                   :as :stream})]
+          
+          ;; Handle errors
+          (when (>= (:status response) 400)
+            (>! output-ch (streaming/stream-error "openrouter" 
+                                                  (str "HTTP " (:status response))
+                                                  :status (:status response)))
+            (streaming/close-stream! output-ch))
+          
+          ;; Process streaming response
+          (when (= 200 (:status response))
+            (let [body (:body response)
+                  reader (java.io.BufferedReader. 
+                          (java.io.InputStreamReader. body "UTF-8"))]
+              (loop []
+                (when-let [line (.readLine reader)]
+                  (when-let [parsed (streaming/parse-sse-line line json/decode)]
+                    (let [transformed (transform-streaming-chunk-impl :openrouter parsed)]
+                      (>! output-ch transformed)))
+                  (recur)))
+              (.close reader)
+              (streaming/close-stream! output-ch))))
+        
+        (catch Exception e
+          (log/error "Error in streaming request" {:error (.getMessage e)})
+          (>! output-ch (streaming/stream-error "openrouter" (.getMessage e)))
+          (streaming/close-stream! output-ch))))
+    
+    output-ch))
 
 ;; ============================================================================
 ;; Utility Functions
