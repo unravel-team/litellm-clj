@@ -87,12 +87,12 @@
   "Transform Anthropic tool uses to standard format"
   [content]
   (when-let [tool-uses (seq (filter #(= "tool_use" (:type %)) content))]
-    (map (fn [tool-use]
-           {:id (:id tool-use)
-            :type "function"
-            :function {:name (:name tool-use)
-                      :arguments (json/encode (:input tool-use))}})
-         tool-uses)))
+    (vec (map (fn [tool-use]
+                {:id (:id tool-use)
+                 :type "function"
+                 :function {:name (:name tool-use)
+                           :arguments (json/encode (:input tool-use))}})
+              tool-uses))))
 
 (defn transform-choice
   "Transform Anthropic response to standard choice format"
