@@ -184,7 +184,7 @@
 (defn supports-streaming-impl
   "OpenRouter-specific supports-streaming? implementation"
   [provider-name]
-  true)
+  false)
 
 (defn supports-function-calling-impl
   "OpenRouter-specific supports-function-calling? implementation"
