@@ -53,13 +53,14 @@
                     other-messages)}))
 
 (defn transform-tools
-  "Transform tools to Anthropic format"
+  \"Transform tools to Anthropic format\"
   [tools]
   (when tools
     (map (fn [tool]
-           {:name (get-in tool [:function :name])
-            :description (get-in tool [:function :description])
-            :input_schema (get-in tool [:function :parameters])})
+           (let [func (:function tool)]
+             {:name (or (:function-name func) (:name func))
+              :description (or (:function-description func) (:description func))
+              :input_schema (or (:function-parameters func) (:parameters func))}))
          tools)))
 
 (defn transform-tool-choice
