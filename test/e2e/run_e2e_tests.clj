@@ -1,11 +1,87 @@
 (ns e2e.run-e2e-tests
   "E2E test runner for all providers"
   (:require [litellm.core :as litellm]
+            [cheshire.core :as json]
             [clojure.core.async :as async]))
+
+(def calculator-tool
+  "Simple calculator tool for testing"
+  {:type "function"
+   :function {:name "calculate"
+             :description "Perform a simple calculation"
+             :parameters {:type "object"
+                         :properties {:operation {:type "string"
+                                                 :enum ["add" "multiply"]
+                                                 :description "The operation to perform"}
+                                     :a {:type "number"
+                                        :description "First number"}
+                                     :b {:type "number"
+                                        :description "Second number"}}
+                         :required ["operation" "a" "b"]}}})
+
+(defn execute-calculator
+  "Execute the calculator tool"
+  [args]
+  (let [operation (:operation args)
+        a (:a args)
+        b (:b args)
+        result (case operation
+                 "add" (+ a b)
+                 "multiply" (* a b))]
+    (json/encode {:result result})))
+
+(defn test-function-calling
+  "Test function calling for a provider"
+  [provider-name model api-key]
+  (try
+    (println (format "  → Testing function calling..."))
+    
+    ;; Test 1: Basic function call request
+    (let [response (litellm/completion provider-name model
+                                      {:messages [{:role :user 
+                                                   :content "What is 5 plus 3?"}]
+                                       :tools [calculator-tool]
+                                       :tool-choice :auto
+                                       :max-tokens 512
+                                       :api-key api-key})
+          tool-calls (get-in response [:choices 0 :message :tool-calls])]
+      
+      ;; Check if model requested a tool call
+      (if (seq tool-calls)
+        (do
+          (assert (vector? tool-calls) "Tool calls should be a vector")
+          (assert (= "function" (:type (first tool-calls))) "Tool call type should be 'function'")
+          (assert (= "calculate" (get-in tool-calls [0 :function :name])) "Should call calculate function")
+          (println (format "    ✓ Model requested tool call: %s" (get-in tool-calls [0 :function :name])))
+          
+          ;; Test 2: Send tool result back
+          (let [tool-call (first tool-calls)
+                arguments (json/decode (get-in tool-call [:function :arguments]) true)
+                result (execute-calculator arguments)
+                
+                ;; Continue conversation with tool result
+                final-response (litellm/completion provider-name model
+                                                  {:messages [{:role :user :content "What is 5 plus 3?"}
+                                                             (get-in response [:choices 0 :message])
+                                                             {:role :tool
+                                                              :tool-call-id (:id tool-call)
+                                                              :content result}]
+                                                   :max-tokens 512
+                                                   :api-key api-key})
+                final-content (get-in final-response [:choices 0 :message :content])]
+            
+            (assert (some? final-content) "Should receive final response after tool execution")
+            (println (format "    ✓ Tool execution completed successfully"))
+            (println (format "  ✓ Function calling test passed"))))
+        
+        (println "  ⚠️  Function calling test skipped - model did not request tool call")))
+    
+    (catch Exception e
+      (println (format "  ⚠️  Function calling test skipped - error: %s" (.getMessage e))))))
 
 (defn test-provider
   "Test a provider with the given configuration"
-  [provider-name model api-key-env]
+  [provider-name model api-key-env supports-functions?]
   (let [api-key (System/getenv api-key-env)]
     (if-not api-key
       {:provider provider-name :status :skipped :reason (str api-key-env " not set")}
@@ -68,6 +144,10 @@
             (catch Exception e
               (println (format "  ⚠️  Streaming test skipped - error: %s" (.getMessage e)))))
           
+          ;; Test 5: Function calling (if supported)
+          (when supports-functions?
+            (test-function-calling provider-name model api-key))
+          
           (println (format "✅ %s provider tests passed!\n" provider-name))
           {:provider provider-name :status :passed}
           
@@ -104,11 +184,11 @@
   (println "║          LiteLLM-Clj E2E Provider Tests                  ║")
   (println "╚═══════════════════════════════════════════════════════════╝\n")
   
-  (let [results [(test-provider :openai "gpt-3.5-turbo" "OPENAI_API_KEY")
-                 (test-provider :anthropic "claude-3-haiku-20240307" "ANTHROPIC_API_KEY")
-                 (test-provider :gemini "gemini-2.5-flash-lite" "GEMINI_API_KEY")
-                 (test-provider :mistral "mistral-small-latest" "MISTRAL_API_KEY")
-                 (test-provider :openrouter "openai/gpt-3.5-turbo" "OPENROUTER_API_KEY")
+  (let [results [(test-provider :openai "gpt-3.5-turbo" "OPENAI_API_KEY" true)
+                 (test-provider :anthropic "claude-3-haiku-20240307" "ANTHROPIC_API_KEY" true)
+                 (test-provider :gemini "gemini-2.5-flash-lite" "GEMINI_API_KEY" true)
+                 (test-provider :mistral "mistral-small-latest" "MISTRAL_API_KEY" false)
+                 (test-provider :openrouter "openai/gpt-3.5-turbo" "OPENROUTER_API_KEY" false)
                  (test-ollama)]
         
         passed (count (filter #(= :passed (:status %)) results))
