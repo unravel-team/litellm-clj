@@ -3,7 +3,13 @@
           :test-paths ["test"]
           :source-paths ["src"]
           :ns-patterns [".*-test$"]
-          :skip-meta [:integration]}]
+          :skip-meta [:integration :e2e]}
+         
+         {:id :e2e
+          :test-paths ["test/e2e"]
+          :source-paths ["src"]
+          :ns-patterns [".*-test$"]
+          :focus-meta [:e2e]}]
  
  :plugins [:kaocha.plugin/profiling]
  

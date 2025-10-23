@@ -33,7 +33,7 @@ e2e:
 	@echo "Running E2E provider tests..."
 	@echo "Testing real API calls for each provider (configure API keys as needed)"
 	@echo ""
-	clojure -M -m e2e.run-e2e-tests
+	clojure -M:test -m kaocha.runner :e2e --reporter kaocha.report/documentation
 
 clean:
 	rm -rf target .cpcache
