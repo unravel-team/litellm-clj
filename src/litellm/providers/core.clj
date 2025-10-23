@@ -80,6 +80,9 @@
 (defmethod make-streaming-request :gemini [provider-name transformed-request thread-pools config]
   (gemini/make-streaming-request-impl provider-name transformed-request thread-pools config))
 
+(defmethod make-streaming-request :openrouter [provider-name transformed-request thread-pools config]
+  (openrouter/make-streaming-request-impl provider-name transformed-request thread-pools config))
+
 ;; transform-response
 ;; ----------------------------------------------------------------------------
 
@@ -120,6 +123,9 @@
 
 (defmethod transform-streaming-chunk :gemini [provider-name chunk]
   (gemini/transform-streaming-chunk-impl provider-name chunk))
+
+(defmethod transform-streaming-chunk :openrouter [provider-name chunk]
+  (openrouter/transform-streaming-chunk-impl provider-name chunk))
 
 ;; supports-streaming?
 ;; ----------------------------------------------------------------------------
