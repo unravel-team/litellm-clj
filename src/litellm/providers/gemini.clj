@@ -1,10 +1,12 @@
 (ns litellm.providers.gemini
   "Google Gemini provider implementation for LiteLLM"
   (:require [litellm.providers.core :as core]
+            [litellm.streaming :as streaming]
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
+            [clojure.core.async :as async :refer [go >!]]
             [com.climate.claypoole :as cp]))
 
 ;; ============================================================================
@@ -308,20 +310,59 @@
                                "RECITATION" :content_filter
                                nil)}]}))
 
-(defn handle-streaming-response
-  "Handle streaming response from Gemini"
-  [response callback]
-  (let [body (:body response)]
-    (doseq [line (str/split-lines body)]
-      (when (str/starts-with? line "data: ")
-        (let [data (subs line 6)]
-          (when-not (= data "[DONE]")
-            (try
-              (let [parsed (json/decode data true)
-                    transformed (transform-streaming-chunk parsed)]
-                (callback transformed))
-              (catch Exception e
-                (log/debug "Failed to parse streaming chunk" {:line line :error (.getMessage e)})))))))))
+(defn transform-streaming-chunk-impl
+  "Gemini-specific transform-streaming-chunk implementation for multimethod"
+  [provider-name chunk]
+  (transform-streaming-chunk chunk))
+
+(defn make-streaming-request-impl
+  "Gemini-specific make-streaming-request implementation"
+  [provider-name transformed-request thread-pools config]
+  (let [model (:model transformed-request)
+        url (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/" model ":streamGenerateContent")
+        request-body (dissoc transformed-request :model)
+        output-ch (streaming/create-stream-channel)]
+    (go
+      (try
+        (let [response (http/post url
+                                  {:headers {"x-goog-api-key" (:api-key config)
+                                             "Content-Type" "application/json"
+                                             "User-Agent" "litellm-clj/1.0.0"}
+                                   :body (json/encode request-body)
+                                   :timeout (:timeout config 30000)
+                                   :as :stream})]
+          
+          ;; Handle errors
+          (when (>= (:status response) 400)
+            (>! output-ch (streaming/stream-error "gemini" 
+                                                  (str "HTTP " (:status response))
+                                                  :status (:status response)))
+            (streaming/close-stream! output-ch))
+          
+          ;; Process streaming response - Gemini uses JSON-per-line, not SSE
+          (when (= 200 (:status response))
+            (let [body (:body response)
+                  reader (java.io.BufferedReader. 
+                          (java.io.InputStreamReader. body "UTF-8"))]
+              (loop []
+                (when-let [line (.readLine reader)]
+                  (when (seq (str/trim line))
+                    (try
+                      (let [parsed (json/decode line true)
+                            transformed (core/transform-streaming-chunk :gemini parsed)]
+                        (>! output-ch transformed))
+                      (catch Exception e
+                        (log/debug "Failed to parse Gemini streaming chunk" {:line line :error (.getMessage e)}))))
+                  (recur)))
+              (.close reader)
+              (streaming/close-stream! output-ch))))
+        
+        (catch Exception e
+          (log/error "Error in streaming request" {:error (.getMessage e)})
+          (>! output-ch (streaming/stream-error "gemini" (.getMessage e)))
+          (streaming/close-stream! output-ch))))
+    
+    output-ch))
 
 ;; ============================================================================
 ;; Utility Functions

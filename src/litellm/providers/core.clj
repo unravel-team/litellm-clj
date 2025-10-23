@@ -186,6 +186,14 @@
   (require 'litellm.providers.gemini)
   ((resolve 'litellm.providers.gemini/get-cost-per-token-impl) provider-name model))
 
+(defmethod transform-streaming-chunk :gemini [provider-name chunk]
+  (require 'litellm.providers.gemini)
+  ((resolve 'litellm.providers.gemini/transform-streaming-chunk-impl) provider-name chunk))
+
+(defmethod make-streaming-request :gemini [provider-name transformed-request thread-pools config]
+  (require 'litellm.providers.gemini)
+  ((resolve 'litellm.providers.gemini/make-streaming-request-impl) provider-name transformed-request thread-pools config))
+
 ;; Mistral Provider Stubs
 (defmethod transform-request :mistral [provider-name request config]
   (require 'litellm.providers.mistral)
