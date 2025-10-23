@@ -28,8 +28,11 @@
   [tools]
   (when tools
     (map (fn [tool]
-           {:type (:tool-type tool "function")
-            :function (select-keys (:function tool) [:name :description :parameters])})
+           (let [func (:function tool)]
+             {:type (:tool-type tool "function")
+              :function {:name (or (:function-name func) (:name func))
+                        :description (or (:function-description func) (:description func))
+                        :parameters (or (:function-parameters func) (:parameters func))}}))
          tools)))
 
 (defn transform-tool-choice
