@@ -77,7 +77,12 @@
         (println "  ⚠️  Function calling test skipped - model did not request tool call")))
     
     (catch Exception e
-      (println (format "  ⚠️  Function calling test skipped - error: %s" (.getMessage e))))))
+      (println (format "  ⚠️  Function calling test skipped - error: %s" (.getMessage e)))
+      (when (instance? clojure.lang.ExceptionInfo e)
+        (println (format "    Error data: %s" (pr-str (ex-data e)))))
+      (println "    Stack trace:")
+      (doseq [line (take 5 (.getStackTrace e))]
+        (println (format "      %s" line))))))
 
 (defn test-provider
   "Test a provider with the given configuration"
