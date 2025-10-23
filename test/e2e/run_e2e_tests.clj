@@ -41,7 +41,7 @@
                                       {:messages [{:role :user 
                                                    :content "What is 5 plus 3?"}]
                                        :tools [calculator-tool]
-                                       :tool-choice :auto
+                                       :tool-choice :required
                                        :max-tokens 512
                                        :api-key api-key})
           tool-calls (get-in response [:choices 0 :message :tool-calls])]
