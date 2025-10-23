@@ -22,13 +22,55 @@
     
     {:system (when system-message (:content system-message))
      :messages (map (fn [msg]
-                      {:role (case (:role msg)
-                               :user "user"
-                               :assistant "assistant"
-                               :tool "assistant" ;; Anthropic doesn't have tool role, map to assistant
-                               (name (:role msg)))
-                       :content (:content msg)})
+                      (let [base {:role (case (:role msg)
+                                          :user "user"
+                                          :assistant "assistant"
+                                          :tool "user" ;; Tool results are sent as user messages
+                                          (name (:role msg)))}]
+                        (cond
+                          ;; Tool result message
+                          (= :tool (:role msg))
+                          (assoc base :content [{:type "tool_result"
+                                                :tool_use_id (:tool-call-id msg)
+                                                :content (:content msg)}])
+                          
+                          ;; Assistant message with tool calls
+                          (and (= :assistant (:role msg)) (:tool-calls msg))
+                          (assoc base :content 
+                                 (vec (concat
+                                       (when (:content msg)
+                                         [{:type "text" :text (:content msg)}])
+                                       (map (fn [tool-call]
+                                              {:type "tool_use"
+                                               :id (:id tool-call)
+                                               :name (get-in tool-call [:function :name])
+                                               :input (json/decode (get-in tool-call [:function :arguments]) true)})
+                                            (:tool-calls msg)))))
+                          
+                          ;; Regular text message
+                          :else
+                          (assoc base :content (:content msg)))))
                     other-messages)}))
+
+(defn transform-tools
+  "Transform tools to Anthropic format"
+  [tools]
+  (when tools
+    (map (fn [tool]
+           {:name (get-in tool [:function :name])
+            :description (get-in tool [:function :description])
+            :input_schema (get-in tool [:function :parameters])})
+         tools)))
+
+(defn transform-tool-choice
+  "Transform tool choice to Anthropic format"
+  [tool-choice]
+  (cond
+    (= tool-choice :auto) {:type "auto"}
+    (= tool-choice :any) {:type "any"}
+    (= tool-choice :none) {:type "none"}
+    (map? tool-choice) {:type "tool" :name (:name tool-choice)}
+    :else {:type "auto"}))
 
 ;; ============================================================================
 ;; Response Transformations
@@ -40,13 +82,28 @@
   {:role (keyword (:role message))
    :content (:content message)})
 
+(defn transform-tool-calls
+  "Transform Anthropic tool uses to standard format"
+  [content]
+  (when-let [tool-uses (seq (filter #(= "tool_use" (:type %)) content))]
+    (map (fn [tool-use]
+           {:id (:id tool-use)
+            :type "function"
+            :function {:name (:name tool-use)
+                      :arguments (json/encode (:input tool-use))}})
+         tool-uses)))
+
 (defn transform-choice
   "Transform Anthropic response to standard choice format"
   [response index]
-  {:index index
-   :message {:role :assistant
-             :content (get-in response [:content 0 :text])}
-   :finish-reason (keyword (:stop_reason response))})
+  (let [content (:content response)
+        text-content (some #(when (= "text" (:type %)) (:text %)) content)
+        tool-calls (transform-tool-calls content)]
+    {:index index
+     :message {:role :assistant
+               :content text-content
+               :tool-calls tool-calls}
+     :finish-reason (keyword (:stop_reason response))}))
 
 (defn transform-usage
   "Transform Anthropic usage to standard format"
@@ -135,10 +192,12 @@
                      :top_p (:top-p request 1.0)
                      :stream (:stream request false)}]
     
-    ;; Add system prompt if present
+    ;; Add system prompt, messages, tools if present
     (cond-> transformed
       (:system messages-data) (assoc :system (:system messages-data))
-      (:messages messages-data) (assoc :messages (:messages messages-data)))))
+      (:messages messages-data) (assoc :messages (:messages messages-data))
+      (:tools request) (assoc :tools (transform-tools (:tools request)))
+      (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request))))))
 
 (defn make-request-impl
   "Anthropic-specific make-request implementation"
@@ -181,7 +240,7 @@
 (defn supports-function-calling-impl
   "Anthropic-specific supports-function-calling? implementation"
   [provider-name]
-  false)
+  true)
 
 (defn get-rate-limits-impl
   "Anthropic-specific get-rate-limits implementation"
@@ -217,21 +276,51 @@
   [provider-name chunk]
   (let [event-type (:type chunk)]
     (case event-type
-      "content_block_delta" {:id (:message_id chunk)
-                             :object "chat.completion.chunk"
-                             :created (quot (System/currentTimeMillis) 1000)
-                             :model (:model chunk)
-                             :choices [{:index 0
-                                       :delta {:role :assistant
-                                              :content (get-in chunk [:delta :text])}
-                                       :finish-reason nil}]}
+      "content_block_start" (when (= "tool_use" (get-in chunk [:content_block :type]))
+                              {:id (:message_id chunk)
+                               :object "chat.completion.chunk"
+                               :created (quot (System/currentTimeMillis) 1000)
+                               :model (:model chunk)
+                               :choices [{:index 0
+                                         :delta {:role :assistant
+                                                :tool-calls [{:id (get-in chunk [:content_block :id])
+                                                             :type "function"
+                                                             :function {:name (get-in chunk [:content_block :name])
+                                                                       :arguments ""}}]}
+                                         :finish-reason nil}]})
+      "content_block_delta" (cond
+                              ;; Text delta
+                              (get-in chunk [:delta :text])
+                              {:id (:message_id chunk)
+                               :object "chat.completion.chunk"
+                               :created (quot (System/currentTimeMillis) 1000)
+                               :model (:model chunk)
+                               :choices [{:index 0
+                                         :delta {:role :assistant
+                                                :content (get-in chunk [:delta :text])}
+                                         :finish-reason nil}]}
+                              
+                              ;; Tool input delta
+                              (get-in chunk [:delta :partial_json])
+                              {:id (:message_id chunk)
+                               :object "chat.completion.chunk"
+                               :created (quot (System/currentTimeMillis) 1000)
+                               :model (:model chunk)
+                               :choices [{:index 0
+                                         :delta {:tool-calls [{:function {:arguments (get-in chunk [:delta :partial_json])}}]}
+                                         :finish-reason nil}]}
+                              
+                              :else nil)
       "message_stop" {:id (:message_id chunk)
                      :object "chat.completion.chunk"
                      :created (quot (System/currentTimeMillis) 1000)
                      :model (:model chunk)
                      :choices [{:index 0
                                :delta {}
-                               :finish-reason :stop}]}
+                               :finish-reason (case (:stop_reason chunk)
+                                               "end_turn" :stop
+                                               "tool_use" :tool_calls
+                                               :stop)}]}
       nil)))
 
 (defn make-streaming-request-impl
