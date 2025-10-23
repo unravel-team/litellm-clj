@@ -53,7 +53,7 @@
                     other-messages)}))
 
 (defn transform-tools
-  \"Transform tools to Anthropic format\"
+  "Transform tools to Anthropic format"
   [tools]
   (when tools
     (map (fn [tool]
