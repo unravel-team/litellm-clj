@@ -110,24 +110,39 @@ Add to your `project.clj`:
 
 ## Quick Start
 
-```clojure
-(require '[litellm.core :as litellm])
+### Option 1: Direct API (litellm.core)
 
-;; Start the LiteLLM system
-(def system (litellm/start-system {:telemetry {:enabled true}
-                                    :thread-pools {:io-pool-size 10
-                                                   :cpu-pool-size 4}}))
+```clojure
+(require '[litellm.core :as llm])
 
 ;; Make a completion request
-(def response @(litellm/completion system
-                 {:model "gpt-3.5-turbo"
-                  :messages [{:role "user" :content "Hello, how are you?"}]}))
+(def response (llm/completion :openai "gpt-4o-mini"
+                {:messages [{:role :user :content "Hello, how are you?"}]}
+                {:api-key (System/getenv "OPENAI_API_KEY")}))
+
+;; Access the response
+(println (llm/extract-content response))
+```
+
+### Option 2: System-based API (litellm.system)
+
+```clojure
+(require '[litellm.system :as system])
+
+;; Create a system with configuration
+(def sys (system/create-system
+          {:providers {:openai {:api-key (System/getenv "OPENAI_API_KEY")}}
+           :thread-pools {:api-calls {:pool-size 10}}}))
+
+;; Make a completion request
+(def response (system/completion sys :openai "gpt-4o-mini"
+                {:messages [{:role :user :content "Hello, how are you?"}]}))
 
 ;; Access the response
 (println (-> response :choices first :message :content))
 
-;; Stop the system when done
-(litellm/stop-system system)
+;; Shutdown the system when done
+(system/shutdown-system! sys)
 ```
 
 ---
@@ -137,45 +152,75 @@ Add to your `project.clj`:
 ### Basic Completion
 
 ```clojure
-(require '[litellm.core :as litellm])
+(require '[litellm.core :as llm])
 
-(def system (litellm/start-system {}))
+;; Simple completion with OpenAI
+(def response (llm/completion :openai "gpt-4o-mini"
+                {:messages [{:role :user :content "Explain quantum computing"}]
+                 :max-tokens 100}
+                {:api-key (System/getenv "OPENAI_API_KEY")}))
 
-;; Simple completion
-(def response @(litellm/completion system
-                 {:model "gpt-3.5-turbo"
-                  :messages [{:role "user" :content "Explain quantum computing"}]
-                  :max_tokens 100}))
+;; Extract the content
+(println (llm/extract-content response))
+
+;; Or use provider-specific convenience functions
+(def response2 (llm/openai-completion "gpt-4o-mini"
+                 {:messages [{:role :user :content "What is Clojure?"}]}
+                 :api-key (System/getenv "OPENAI_API_KEY")))
 ```
 
 ### Streaming Responses
 
 ```clojure
-;; Stream responses for better UX
-(litellm/completion system
-  {:model "gpt-4"
-   :messages [{:role "user" :content "Write a poem"}]
-   :stream true}
-  {:on-chunk (fn [chunk]
-               (print (-> chunk :choices first :delta :content)))
-   :on-complete (fn [response]
-                  (println "\nStream complete!"))
-   :on-error (fn [error]
-               (println "Error:" error))})
+(require '[litellm.core :as llm]
+         '[litellm.streaming :as streaming]
+         '[clojure.core.async :refer [go-loop <!]])
+
+;; Stream responses - returns a core.async channel
+(let [ch (llm/completion :openai "gpt-4"
+           {:messages [{:role :user :content "Write a poem"}]
+            :stream true}
+           {:api-key (System/getenv "OPENAI_API_KEY")})]
+  
+  ;; Consume the stream with go-loop
+  (go-loop []
+    (when-let [chunk (<! ch)]
+      (when-let [content (streaming/extract-content chunk)]
+        (print content)
+        (flush))
+      (recur))))
+
+;; Or use callback-based API
+(let [ch (llm/completion :openai "gpt-4"
+           {:messages [{:role :user :content "Write a poem"}]
+            :stream true}
+           {:api-key (System/getenv "OPENAI_API_KEY")})]
+  (streaming/consume-stream-with-callbacks ch
+    (fn [chunk] (print (streaming/extract-content chunk)))
+    (fn [response] (println "\nStream complete!"))
+    (fn [error] (println "Error:" error))))
 ```
 
 ### Function Calling (OpenAI)
 
 ```clojure
-(def response @(litellm/completion system
-                 {:model "gpt-4"
-                  :messages [{:role "user" :content "What's the weather in Boston?"}]
-                  :functions [{:name "get_weather"
-                              :description "Get the current weather"
-                              :parameters {:type "object"
-                                          :properties {:location {:type "string"
-                                                                 :description "City name"}}
-                                          :required ["location"]}}]}))
+(require '[litellm.core :as llm])
+
+(def response (llm/completion :openai "gpt-4"
+                {:messages [{:role :user :content "What's the weather in Boston?"}]
+                 :functions [{:name "get_weather"
+                             :description "Get the current weather"
+                             :parameters {:type "object"
+                                         :properties {:location {:type "string"
+                                                                :description "City name"}}
+                                         :required ["location"]}}]}
+                {:api-key (System/getenv "OPENAI_API_KEY")}))
+
+;; Check for function call
+(let [message (llm/extract-message response)]
+  (when-let [function-call (:function-call message)]
+    (println "Function to call:" (:name function-call))
+    (println "Arguments:" (:arguments function-call))))
 ```
 
 ---
@@ -191,9 +236,11 @@ export OPENAI_API_KEY=your-api-key-here
 ```
 
 ```clojure
-(litellm/completion system
-  {:model "gpt-4"
-   :messages [{:role "user" :content "Hello!"}]})
+(require '[litellm.core :as llm])
+
+(llm/completion :openai "gpt-4"
+  {:messages [{:role :user :content "Hello!"}]}
+  {:api-key (System/getenv "OPENAI_API_KEY")})
 ```
 
 ### Anthropic (Claude)
@@ -205,10 +252,12 @@ export ANTHROPIC_API_KEY=your-api-key-here
 ```
 
 ```clojure
-(litellm/completion system
-  {:model "claude-3-opus-20240229"
-   :messages [{:role "user" :content "Hello Claude!"}]
-   :max_tokens 1024})
+(require '[litellm.core :as llm])
+
+(llm/completion :anthropic "claude-3-sonnet-20240229"
+  {:messages [{:role :user :content "Hello Claude!"}]
+   :max-tokens 1024}
+  {:api-key (System/getenv "ANTHROPIC_API_KEY")})
 ```
 
 ### OpenRouter
@@ -220,20 +269,22 @@ export OPENROUTER_API_KEY=your-api-key-here
 ```
 
 ```clojure
+(require '[litellm.core :as llm])
+
 ;; Use OpenAI models via OpenRouter
-(litellm/completion system
-  {:model "openai/gpt-4"
-   :messages [{:role "user" :content "Hello!"}]})
+(llm/completion :openrouter "openai/gpt-4"
+  {:messages [{:role :user :content "Hello!"}]}
+  {:api-key (System/getenv "OPENROUTER_API_KEY")})
 
 ;; Use Anthropic models via OpenRouter
-(litellm/completion system
-  {:model "anthropic/claude-3-opus"
-   :messages [{:role "user" :content "Hello!"}]})
+(llm/completion :openrouter "anthropic/claude-3-opus"
+  {:messages [{:role :user :content "Hello!"}]}
+  {:api-key (System/getenv "OPENROUTER_API_KEY")})
 
 ;; Use Meta models via OpenRouter
-(litellm/completion system
-  {:model "meta-llama/llama-2-70b-chat"
-   :messages [{:role "user" :content "Hello!"}]})
+(llm/completion :openrouter "meta-llama/llama-2-70b-chat"
+  {:messages [{:role :user :content "Hello!"}]}
+  {:api-key (System/getenv "OPENROUTER_API_KEY")})
 ```
 
 ### Google Gemini
@@ -245,26 +296,28 @@ export GEMINI_API_KEY=your-api-key-here
 ```
 
 ```clojure
+(require '[litellm.core :as llm])
+
 ;; Use Gemini Pro
-(litellm/completion system
-  {:model "gemini-pro"
-   :messages [{:role "user" :content "Explain quantum computing"}]})
+(llm/completion :gemini "gemini-pro"
+  {:messages [{:role :user :content "Explain quantum computing"}]}
+  {:api-key (System/getenv "GEMINI_API_KEY")})
 
 ;; Use Gemini Pro Vision with images
-(litellm/completion system
-  {:model "gemini-pro-vision"
-   :messages [{:role "user" 
+(llm/completion :gemini "gemini-pro-vision"
+  {:messages [{:role :user 
                :content [{:type "text" :text "What's in this image?"}
-                        {:type "image_url" :image_url {:url "https://..."}}]}]})
+                        {:type "image_url" :image_url {:url "https://..."}}]}]}
+  {:api-key (System/getenv "GEMINI_API_KEY")})
 
-;; Configure safety settings and generation params
-(litellm/completion system
-  {:model "gemini-pro"
-   :messages [{:role "user" :content "Write a story"}]
+;; Configure generation params
+(llm/completion :gemini "gemini-pro"
+  {:messages [{:role :user :content "Write a story"}]
    :temperature 0.9
    :top_p 0.95
    :top_k 40
-   :max_tokens 1024})
+   :max_tokens 1024}
+  {:api-key (System/getenv "GEMINI_API_KEY")})
 ```
 
 ### Mistral AI
@@ -276,37 +329,33 @@ export MISTRAL_API_KEY=your-api-key-here
 ```
 
 ```clojure
+(require '[litellm.core :as llm])
+
 ;; Use Mistral Small for fast, cost-effective responses
-(litellm/completion system
-  {:model "mistral/mistral-small-latest"
-   :messages [{:role "user" :content "Explain quantum computing"}]})
+(llm/completion :mistral "mistral-small-latest"
+  {:messages [{:role :user :content "Explain quantum computing"}]}
+  {:api-key (System/getenv "MISTRAL_API_KEY")})
 
 ;; Use Mistral Large for complex reasoning tasks
-(litellm/completion system
-  {:model "mistral/mistral-large-latest"
-   :messages [{:role "user" :content "Analyze this complex problem..."}]
-   :temperature 0.7})
+(llm/completion :mistral "mistral-large-latest"
+  {:messages [{:role :user :content "Analyze this complex problem..."}]
+   :temperature 0.7}
+  {:api-key (System/getenv "MISTRAL_API_KEY")})
 
 ;; Use Codestral for code generation
-(litellm/completion system
-  {:model "mistral/codestral-latest"
-   :messages [{:role "user" :content "Write a Clojure function to parse JSON"}]})
-
-;; Use Magistral models with reasoning support
-(litellm/completion system
-  {:model "mistral/magistral-medium-2506"
-   :messages [{:role "user" :content "Solve this math problem step by step"}]
-   :reasoning-effort "medium"})  ;; Options: "low", "medium", "high"
+(llm/completion :mistral "codestral-latest"
+  {:messages [{:role :user :content "Write a Clojure function to parse JSON"}]}
+  {:api-key (System/getenv "MISTRAL_API_KEY")})
 
 ;; Function calling with Mistral
-(litellm/completion system
-  {:model "mistral/mistral-large-latest"
-   :messages [{:role "user" :content "What's the weather in Paris?"}]
+(llm/completion :mistral "mistral-large-latest"
+  {:messages [{:role :user :content "What's the weather in Paris?"}]
    :tools [{:type "function"
             :function {:name "get_weather"
                       :description "Get current weather"
                       :parameters {:type "object"
-                                  :properties {:location {:type "string"}}}}}]})
+                                  :properties {:location {:type "string"}}}}}]}
+  {:api-key (System/getenv "MISTRAL_API_KEY")})
 ```
 
 ### Ollama (Local Models)
@@ -314,10 +363,11 @@ export MISTRAL_API_KEY=your-api-key-here
 Run Ollama locally and use local models:
 
 ```clojure
-(litellm/completion system
-  {:model "ollama/llama2"
-   :messages [{:role "user" :content "Hello!"}]
-   :api_base "http://localhost:11434"})
+(require '[litellm.core :as llm])
+
+(llm/completion :ollama "llama2"
+  {:messages [{:role :user :content "Hello!"}]}
+  {:api-base "http://localhost:11434"})
 ```
 
 ---
@@ -326,36 +376,49 @@ Run Ollama locally and use local models:
 
 ### System Configuration
 
+For system-based API with thread pool management:
+
 ```clojure
-(def system (litellm/start-system
-  {:telemetry {:enabled true          ;; Enable observability
-               :metrics-interval 60}  ;; Metrics collection interval (seconds)
+(require '[litellm.system :as system])
+
+(def sys (system/create-system
+  {:providers {:openai {:api-key (System/getenv "OPENAI_API_KEY")}
+               :anthropic {:api-key (System/getenv "ANTHROPIC_API_KEY")}}
    
-   :thread-pools {:io-pool-size 10    ;; Thread pool for I/O operations
-                  :cpu-pool-size 4}   ;; Thread pool for CPU-bound tasks
-   
-   :cache {:enabled true              ;; Enable response caching
-           :ttl 3600}                 ;; Cache TTL in seconds
-   
-   :retry {:max-attempts 3            ;; Max retry attempts
-           :backoff-ms 1000}}))       ;; Initial backoff delay
+   :thread-pools {:api-calls {:pool-size 50}      ;; Thread pool for API calls
+                  :cache-ops {:pool-size 10}      ;; Thread pool for cache operations
+                  :retries {:pool-size 20}        ;; Thread pool for retries
+                  :health-checks {:pool-size 5}   ;; Thread pool for health checks
+                  :monitoring {:pool-size 2}}}))  ;; Thread pool for monitoring
+
+;; Use the system
+(system/completion sys :openai "gpt-4o-mini"
+  {:messages [{:role :user :content "Hello!"}]})
+
+;; Always shutdown when done
+(system/shutdown-system! sys)
 ```
 
 ### Request Options
 
 ```clojure
-{:model "gpt-4"                      ;; Model identifier
- :messages [{:role "user"            ;; Conversation messages
+;; Request map (third parameter to completion)
+{:messages [{:role :user             ;; Conversation messages
              :content "Hello"}]
- :max_tokens 100                     ;; Maximum tokens to generate
+ :max-tokens 100                     ;; Maximum tokens to generate
  :temperature 0.7                    ;; Sampling temperature (0.0-2.0)
  :top_p 1.0                          ;; Nucleus sampling
  :n 1                                ;; Number of completions
- :stream false                       ;; Enable streaming
+ :stream false                       ;; Enable streaming (returns core.async channel)
  :stop ["\n"]                        ;; Stop sequences
- :presence_penalty 0.0               ;; Presence penalty (-2.0 to 2.0)
- :frequency_penalty 0.0              ;; Frequency penalty (-2.0 to 2.0)
+ :presence-penalty 0.0               ;; Presence penalty (-2.0 to 2.0)
+ :frequency-penalty 0.0              ;; Frequency penalty (-2.0 to 2.0)
  :user "user-123"}                   ;; User identifier for tracking
+
+;; Config map (fourth parameter to completion)
+{:api-key "sk-..."                   ;; API key (or use env var)
+ :api-base "https://..."             ;; Custom API base URL
+ :timeout 30000}                     ;; Request timeout in milliseconds
 ```
 
 ---
@@ -365,24 +428,40 @@ Run Ollama locally and use local models:
 ### Health Monitoring
 
 ```clojure
+(require '[litellm.system :as system])
+
+;; Create a system
+(def sys (system/create-system
+          {:providers {:openai {:api-key (System/getenv "OPENAI_API_KEY")}}}))
+
 ;; Check system health
-(litellm/health-check system)
-;; => {:status :healthy
-;;     :providers {:openai :ready
-;;                 :anthropic :ready}
-;;     :thread-pools {:io-pool {:active 2 :size 10}
-;;                    :cpu-pool {:active 0 :size 4}}}
+(system/health-check sys)
+;; => {:openai {:healthy true :latency-ms 120}}
+
+;; Get system info
+(system/system-info sys)
+;; => {:providers {:openai {:name :openai :config {...}}}
+;;     :thread-pools {...}
+;;     :config {...}}
 ```
 
 ### Cost Tracking
 
 ```clojure
-;; Get cost estimate for a request
-(def cost-info (litellm/estimate-cost
-                 {:model "gpt-4"
-                  :messages [{:role "user" :content "Hello"}]}))
-;; => {:estimated-tokens 50
-;;     :estimated-cost-usd 0.0015}
+(require '[litellm.core :as llm])
+
+;; Estimate tokens for text
+(llm/estimate-tokens "Hello, world!")
+;; => 4
+
+;; Estimate tokens for a request
+(llm/estimate-request-tokens
+  {:messages [{:role :user :content "Hello, world!"}]})
+;; => {:prompt-tokens 10 :total-tokens 10}
+
+;; Calculate cost for a completed request
+(llm/calculate-cost :openai "gpt-4" 100 50)
+;; => {:prompt-cost 0.003 :completion-cost 0.003 :total-cost 0.006}
 ```
 
 ---
