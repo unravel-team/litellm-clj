@@ -4,6 +4,9 @@
             [litellm.providers.core :as providers]
             [litellm.providers.openai]    ; Load to register provider
             [litellm.providers.anthropic] ; Load to register provider
+            [litellm.providers.gemini]    ; Load to register provider
+            [litellm.providers.mistral]   ; Load to register provider
+            [litellm.providers.ollama]    ; Load to register provider
             [litellm.providers.openrouter] ; Load to register provider
             [litellm.threadpool :as threadpool]))
 
