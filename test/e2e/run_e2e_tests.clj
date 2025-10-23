@@ -6,18 +6,18 @@
 
 (def calculator-tool
   "Simple calculator tool for testing"
-  {:type "function"
-   :function {:name "calculate"
-             :description "Perform a simple calculation"
-             :parameters {:type "object"
-                         :properties {:operation {:type "string"
-                                                 :enum ["add" "multiply"]
-                                                 :description "The operation to perform"}
-                                     :a {:type "number"
-                                        :description "First number"}
-                                     :b {:type "number"
-                                        :description "Second number"}}
-                         :required ["operation" "a" "b"]}}})
+  {:tool-type "function"
+   :function {:function-name "calculate"
+             :function-description "Perform a simple calculation"
+             :function-parameters {:type "object"
+                                  :properties {:operation {:type "string"
+                                                          :enum ["add" "multiply"]
+                                                          :description "The operation to perform"}
+                                              :a {:type "number"
+                                                 :description "First number"}
+                                              :b {:type "number"
+                                                 :description "Second number"}}
+                                  :required ["operation" "a" "b"]}}})
 
 (defn execute-calculator
   "Execute the calculator tool"
