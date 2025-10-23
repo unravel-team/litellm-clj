@@ -86,7 +86,7 @@
 
 (defn test-provider
   "Test a provider with the given configuration"
-  [provider-name model api-key-env supports-functions?]
+  [provider-name model api-key-env supports-functions? supports-streaming?]
   (let [api-key (System/getenv api-key-env)]
     (if-not api-key
       {:provider provider-name :status :skipped :reason (str api-key-env " not set")}
@@ -121,33 +121,35 @@
             (assert (string? (litellm/extract-content response)) "Content extraction failed")
             (println (format "  ✓ Helper function test passed")))
           
-          ;; Test 4: Streaming
-          (try
-            (let [ch (litellm/completion provider-name model
-                                        {:messages [{:role :user :content "Count: 1"}]
-                                         :max-tokens 20
-                                         :stream true
-                                         :api-key api-key})
-                  chunks (atom [])
-                  timeout-ms 10000
-                  start-time (System/currentTimeMillis)]
-              (assert (some? ch) "Streaming channel should not be nil")
-              (println (format "  → Collecting streaming chunks (timeout: %dms)..." timeout-ms))
-              ;; Collect chunks with timeout
-              (loop []
-                (when (< (- (System/currentTimeMillis) start-time) timeout-ms)
-                  (when-let [chunk (async/alt!!
-                                     ch ([v] v)
-                                     (async/timeout 2000) nil)]
-                    (swap! chunks conj chunk)
-                    (recur))))
-              (if (seq @chunks)
-                (do
-                  (assert (every? map? @chunks) "All chunks should be maps")
-                  (println (format "  ✓ Streaming test passed (%d chunks received)" (count @chunks))))
-                (println "  ⚠️  Streaming test skipped - no chunks received (may not be supported yet)")))
-            (catch Exception e
-              (println (format "  ⚠️  Streaming test skipped - error: %s" (.getMessage e)))))
+          ;; Test 4: Streaming (if supported)
+          (if supports-streaming?
+            (try
+              (let [ch (litellm/completion provider-name model
+                                          {:messages [{:role :user :content "Count: 1"}]
+                                           :max-tokens 20
+                                           :stream true
+                                           :api-key api-key})
+                    chunks (atom [])
+                    timeout-ms 10000
+                    start-time (System/currentTimeMillis)]
+                (assert (some? ch) "Streaming channel should not be nil")
+                (println (format "  → Collecting streaming chunks (timeout: %dms)..." timeout-ms))
+                ;; Collect chunks with timeout
+                (loop []
+                  (when (< (- (System/currentTimeMillis) start-time) timeout-ms)
+                    (when-let [chunk (async/alt!!
+                                       ch ([v] v)
+                                       (async/timeout 2000) nil)]
+                      (swap! chunks conj chunk)
+                      (recur))))
+                (if (seq @chunks)
+                  (do
+                    (assert (every? map? @chunks) "All chunks should be maps")
+                    (println (format "  ✓ Streaming test passed (%d chunks received)" (count @chunks))))
+                  (println "  ⚠️  Streaming test skipped - no chunks received")))
+              (catch Exception e
+                (println (format "  ⚠️  Streaming test failed - error: %s" (.getMessage e)))))
+            (println "  ⚠️  Streaming test skipped - not supported by provider"))
           
           ;; Test 5: Function calling (if supported)
           (when supports-functions?
@@ -189,11 +191,11 @@
   (println "║          LiteLLM-Clj E2E Provider Tests                  ║")
   (println "╚═══════════════════════════════════════════════════════════╝\n")
   
-  (let [results [(test-provider :openai "gpt-3.5-turbo" "OPENAI_API_KEY" true)
-                 (test-provider :anthropic "claude-3-haiku-20240307" "ANTHROPIC_API_KEY" true)
-                 (test-provider :gemini "gemini-2.5-flash-lite" "GEMINI_API_KEY" true)
-                 (test-provider :mistral "mistral-small-latest" "MISTRAL_API_KEY" false)
-                 (test-provider :openrouter "openai/gpt-3.5-turbo" "OPENROUTER_API_KEY" false)
+  (let [results [(test-provider :openai "gpt-3.5-turbo" "OPENAI_API_KEY" true true)
+                 (test-provider :anthropic "claude-3-haiku-20240307" "ANTHROPIC_API_KEY" true true)
+                 (test-provider :gemini "gemini-2.5-flash-lite" "GEMINI_API_KEY" true true)
+                 (test-provider :mistral "mistral-small-latest" "MISTRAL_API_KEY" false true)
+                 (test-provider :openrouter "openai/gpt-3.5-turbo" "OPENROUTER_API_KEY" false false)
                  (test-ollama)]
         
         passed (count (filter #(= :passed (:status %)) results))
