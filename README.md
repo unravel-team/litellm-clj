@@ -2,26 +2,55 @@
 
 A Clojure port of the popular [LiteLLM](https://github.com/BerriAI/litellm) library, providing a unified interface for multiple LLM providers with comprehensive observability and thread pool management.
 
-* [![Clojars Project](https://img.shields.io/clojars/v/tech.unravel/litellm-clj.svg)](https://clojars.org/tech.unravel/litellm-clj)
-* [![cljdoc](https://cljdoc.org/badge/tech.unravel/litellm-clj)](https://cljdoc.org/d/tech.unravel/litellm-clj)
-* [![Continuous Integration Tests](https://github.com/unravel-team/clj-litellm/actions/workflows/test.yml/badge.svg)](https://github.com/unravel-team/clj-litellm/actions/workflows/test.yml)
-* [![Lint](https://github.com/unravel-team/clj-litellm/actions/workflows/lint.yml/badge.svg)](https://github.com/unravel-team/clj-litellm/actions/workflows/lint.yml)
+[![Clojars Project](https://img.shields.io/clojars/v/tech.unravel/litellm-clj.svg)](https://clojars.org/tech.unravel/litellm-clj)
+[![cljdoc](https://cljdoc.org/badge/tech.unravel/litellm-clj)](https://cljdoc.org/d/tech.unravel/litellm-clj)
+[![Continuous Integration Tests](https://github.com/unravel-team/clj-litellm/actions/workflows/test.yml/badge.svg)](https://github.com/unravel-team/clj-litellm/actions/workflows/test.yml)
+[![Lint](https://github.com/unravel-team/clj-litellm/actions/workflows/lint.yml/badge.svg)](https://github.com/unravel-team/clj-litellm/actions/workflows/lint.yml)
 
-## Model Provider Support Matrix
+---
 
-| Provider     | Status       | Models                                     | Function Calling | Streaming |
-|--------------|--------------|--------------------------------------------|--------------------|-----------|
-| OpenAI       | ✅ Supported | GPT-3.5-Turbo, GPT-4, GPT-4o               | ✅               | ✅        |
-| Anthropic    | ✅ Supported | Claude 3 (Opus, Sonnet, Haiku), Claude 2.x | ❌               | ✅        |
-| OpenRouter   | ✅ Supported | All OpenRouter models                      | ✅               | ✅        |
-| Google Gemini| ✅ Supported | Gemini Pro, Gemini Pro Vision, Gemini Ultra| ❌               | ✅        |
-| Mistral      | ✅ Supported | Mistral Small/Medium/Large, Codestral, Magistral | ✅               | ✅        |
-| Azure OpenAI | 🔄 Planned   | -                                          | -                | -         |
-| Cohere       | 🔄 Planned   | Command                                    | -                | -         |
-| Hugging Face | 🔄 Planned   | Various open models                        | -                | -         |
-| Ollama       | 🔄 Planned   | Local models                               | -                | -         |
-| Together AI  | 🔄 Planned   | Various open models                        | -                | -         |
-| Replicate    | 🔄 Planned   | Various open models                        | -                | -         |
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Model Provider Support](#model-provider-support)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage Examples](#usage-examples)
+  - [Basic Completion](#basic-completion)
+  - [Streaming Responses](#streaming-responses)
+  - [Function Calling](#function-calling-openai)
+- [Provider Configuration](#provider-configuration)
+  - [OpenAI](#openai)
+  - [Anthropic (Claude)](#anthropic-claude)
+  - [OpenRouter](#openrouter)
+  - [Google Gemini](#google-gemini)
+  - [Mistral AI](#mistral-ai)
+  - [Ollama (Local Models)](#ollama-local-models)
+- [Configuration](#configuration)
+  - [System Configuration](#system-configuration)
+  - [Request Options](#request-options)
+- [Advanced Features](#advanced-features)
+  - [Health Monitoring](#health-monitoring)
+  - [Cost Tracking](#cost-tracking)
+- [Documentation](#documentation)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
+
+---
+
+## Overview
+
+LiteLLM Clojure provides a unified, idiomatic Clojure interface for interacting with multiple Large Language Model (LLM) providers. Whether you're using OpenAI, Anthropic, Google Gemini, or any other supported provider, you can use the same API with consistent patterns.
+
+**Key Benefits:**
+- Switch between providers without changing your code
+- Built-in async support with proper context propagation
+- Comprehensive observability and metrics
+- Thread pool management for optimal performance
+- Cost tracking and token estimation
+
+---
 
 ## Features
 
@@ -32,25 +61,36 @@ A Clojure port of the popular [LiteLLM](https://github.com/BerriAI/litellm) libr
 - **Cost Tracking**: Built-in token counting and cost estimation
 - **Streaming Support**: Stream responses for better UX
 - **Function Calling**: Support for OpenAI-style function calling
-## Currently Supported Providers
 
-- **OpenAI**: GPT-3.5-Turbo, GPT-4, GPT-4o, and other OpenAI models
-- **Anthropic**: Claude 3 (Opus, Sonnet, Haiku), Claude 2.x
-- **Google Gemini**: Gemini Pro, Gemini Pro Vision, Gemini Ultra with vision/multimodal support
-- **OpenRouter**: Access to multiple providers through a single API (OpenAI, Anthropic, Google, Meta, etc.)
-- **Mistral AI**: Mistral Small/Medium/Large, Codestral (code generation), Magistral (reasoning), and embedding models
+---
 
-## Planned Providers
+## Model Provider Support
+
+### Currently Supported Providers
+
+| Provider     | Status       | Models                                     | Function Calling | Streaming |
+|--------------|--------------|--------------------------------------------|------------------|-----------|
+| OpenAI       | ✅ Supported | GPT-3.5-Turbo, GPT-4, GPT-4o               | ✅               | ✅        |
+| Anthropic    | ✅ Supported | Claude 3 (Opus, Sonnet, Haiku), Claude 2.x | ❌               | ✅        |
+| OpenRouter   | ✅ Supported | All OpenRouter models                      | ✅               | ✅        |
+| Google Gemini| ✅ Supported | Gemini Pro, Gemini Pro Vision, Gemini Ultra| ❌               | ✅        |
+| Mistral      | ✅ Supported | Mistral Small/Medium/Large, Codestral, Magistral | ✅               | ✅        |
+| Ollama       | ✅ Supported | Local models                               | ❌               | ✅        |
+
+### Planned Providers
 
 - Azure OpenAI
 - Cohere
 - Hugging Face
-- Ollama (local models)
 - Together AI
 - Replicate
 - And more...
 
+---
+
 ## Installation
+
+### Using deps.edn
 
 Add to your `deps.edn`:
 
@@ -58,11 +98,15 @@ Add to your `deps.edn`:
 {:deps {tech.unravel/litellm-clj {:mvn/version "0.2.0"}}}
 ```
 
-Or with Leiningen, add to your `project.clj`:
+### Using Leiningen
+
+Add to your `project.clj`:
 
 ```clojure
 [tech.unravel/litellm-clj "0.2.0"]
 ```
+
+---
 
 ## Quick Start
 
@@ -85,6 +129,8 @@ Or with Leiningen, add to your `project.clj`:
 ;; Stop the system when done
 (litellm/stop-system system)
 ```
+
+---
 
 ## Usage Examples
 
@@ -131,6 +177,8 @@ Or with Leiningen, add to your `project.clj`:
                                                                  :description "City name"}}
                                           :required ["location"]}}]}))
 ```
+
+---
 
 ## Provider Configuration
 
@@ -272,7 +320,9 @@ Run Ollama locally and use local models:
    :api_base "http://localhost:11434"})
 ```
 
-## Configuration Options
+---
+
+## Configuration
 
 ### System Configuration
 
@@ -308,6 +358,8 @@ Run Ollama locally and use local models:
  :user "user-123"}                   ;; User identifier for tracking
 ```
 
+---
+
 ## Advanced Features
 
 ### Health Monitoring
@@ -333,9 +385,23 @@ Run Ollama locally and use local models:
 ;;     :estimated-cost-usd 0.0015}
 ```
 
+---
+
+## Documentation
+
+- **[API Guide](docs/API_GUIDE.md)** - Comprehensive API reference
+- **[Streaming Guide](docs/STREAMING_GUIDE.md)** - Detailed streaming documentation
+- **[Migration Guide](docs/MIGRATION_GUIDE.md)** - Migrating from other libraries
+- **[Namespaces](docs/NAMESPACES.md)** - Namespace organization and structure
+- **[Examples](examples/)** - More code examples
+
+---
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+---
 
 ## Acknowledgments
 
