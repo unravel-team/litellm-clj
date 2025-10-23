@@ -316,3 +316,4 @@ Low-level configuration registry.
                {:provider :openai :model "gpt-4o-mini"}))
    :configs {:openai {:api-key "..."}
              :ollama {:api-base "http://localhost:11434"}}})
+```
