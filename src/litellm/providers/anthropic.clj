@@ -6,8 +6,7 @@
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
-            [clojure.core.async :as async]
-            [com.climate.claypoole :as cp]))
+            [clojure.core.async :as async]))
 
 ;; ============================================================================
 ;; Message Transformations
@@ -197,19 +196,22 @@
   "Anthropic-specific make-request implementation"
   [provider-name transformed-request thread-pool telemetry config]
   (let [url (str (:api-base config "https://api.anthropic.com") "/v1/messages")]
-    (cp/future thread-pool
-      (let [start-time (System/currentTimeMillis)
+    (errors/wrap-http-errors
+     "anthropic"
+     #(let [start-time (System/currentTimeMillis)
             response (http/post url
-                                {:headers {"x-api-key" (:api-key config)
-                                           "anthropic-version" "2023-06-01"
-                                           "Content-Type" "application/json"
-                                           "User-Agent" "litellm-clj/1.0.0"}
-                                 :body (json/encode transformed-request)
-                                 :timeout (:timeout config 30000)
-                                 :as :json})
+                                (conj {:headers {"x-api-key" (:api-key config)
+                                                 "anthropic-version" "2023-06-01"
+                                                 "Content-Type" "application/json"
+                                                 "User-Agent" "litellm-clj/1.0.0"}
+                                       :body (json/encode transformed-request)
+                                       :timeout (:timeout config 30000)
+                                       :as :json}
+                                      (when thread-pool
+                                        {:executor thread-pool})))
             duration (- (System/currentTimeMillis) start-time)]
         
-        ;; Handle errors
+        ;; Handle errors if response has error status
         (when (>= (:status response) 400)
           (handle-error-response :anthropic response))
         
@@ -245,16 +247,17 @@
 (defn health-check-impl
   "Anthropic-specific health-check implementation"
   [provider-name thread-pool config]
-  (cp/future thread-pool
-    (try
-      (let [response (http/get (str (:api-base config "https://api.anthropic.com") "/v1/models")
-                              {:headers {"x-api-key" (:api-key config)
-                                         "anthropic-version" "2023-06-01"}
-                               :timeout 5000})]
-        (= 200 (:status response)))
-      (catch Exception e
-        (log/warn "Anthropic health check failed" {:error (.getMessage e)})
-        false))))
+  (try
+    (let [response (http/get (str (:api-base config "https://api.anthropic.com") "/v1/models")
+                            (conj {:headers {"x-api-key" (:api-key config)
+                                             "anthropic-version" "2023-06-01"}
+                                   :timeout 5000}
+                                  (when thread-pool
+                                    {:executor thread-pool})))]
+      (= 200 (:status response)))
+    (catch Exception e
+      (log/warn "Anthropic health check failed" {:error (.getMessage e)})
+      false)))
 
 (defn get-cost-per-token-impl
   "Anthropic-specific get-cost-per-token implementation"

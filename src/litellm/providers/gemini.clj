@@ -6,8 +6,7 @@
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
-            [clojure.core.async :as async :refer [go >!]]
-            [com.climate.claypoole :as cp]))
+            [clojure.core.async :as async :refer [go >!]]))
 
 ;; ============================================================================
 ;; Message Transformations
@@ -202,22 +201,25 @@
         url (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/" model ":generateContent")
         ;; Remove :model from the request body - Gemini only uses it in the URL
         request-body (dissoc transformed-request :model)]
-    (cp/future thread-pool
-      (let [start-time (System/currentTimeMillis)
-            response (http/post url
-                                {:headers {"x-goog-api-key" (:api-key config)
-                                           "Content-Type" "application/json"
-                                           "User-Agent" "litellm-clj/1.0.0"}
-                                 :body (json/encode request-body)
-                                 :timeout (:timeout config 30000)
-                                 :as :json})
-            duration (- (System/currentTimeMillis) start-time)]
-        
-        ;; Handle errors
-        (when (>= (:status response) 400)
-          (handle-error-response :gemini response))
-        
-        response))))
+    (errors/wrap-http-errors
+      "gemini"
+      #(let [start-time (System/currentTimeMillis)
+             response (http/post url
+                                 (conj {:headers {"x-goog-api-key" (:api-key config)
+                                                  "Content-Type" "application/json"
+                                                  "User-Agent" "litellm-clj/1.0.0"}
+                                        :body (json/encode request-body)
+                                        :timeout (:timeout config 30000)
+                                        :as :json}
+                                       (when thread-pool
+                                         {:executor thread-pool})))
+             duration (- (System/currentTimeMillis) start-time)]
+         
+         ;; Handle errors if response has error status
+         (when (>= (:status response) 400)
+           (handle-error-response :gemini response))
+         
+         response))))
 
 (defn transform-response-impl
   "Gemini-specific transform-response implementation"
@@ -243,20 +245,21 @@
 (defn health-check-impl
   "Gemini-specific health-check implementation"
   [provider-name thread-pool config]
-  (cp/future thread-pool
-    (try
-      (let [response (http/post (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/gemini-2.5-flash-lite:generateContent")
-                                {:headers {"x-goog-api-key" (:api-key config)
-                                           "Content-Type" "application/json"
-                                           "User-Agent" "litellm-clj/1.0.0"}
-                                 :body (json/encode {:contents [{:role "user" :parts [{:text "hi"}]}]
-                                                    :generation_config {:maxOutputTokens 1}})
-                                 :timeout 5000
-                                 :as :json})]
-        (= 200 (:status response)))
-      (catch Exception e
-        (log/warn "Gemini health check failed" {:error (.getMessage e)})
-        false))))
+  (try
+    (let [response (http/post (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/gemini-2.5-flash-lite:generateContent")
+                              (conj {:headers {"x-goog-api-key" (:api-key config)
+                                               "Content-Type" "application/json"
+                                               "User-Agent" "litellm-clj/1.0.0"}
+                                     :body (json/encode {:contents [{:role "user" :parts [{:text "hi"}]}]
+                                                        :generation_config {:maxOutputTokens 1}})
+                                     :timeout 5000
+                                     :as :json}
+                                    (when thread-pool
+                                      {:executor thread-pool})))]
+      (= 200 (:status response)))
+    (catch Exception e
+      (log/warn "Gemini health check failed" {:error (.getMessage e)})
+      false)))
 
 (defn get-cost-per-token-impl
   "Gemini-specific get-cost-per-token implementation"

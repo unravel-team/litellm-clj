@@ -6,8 +6,7 @@
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
-            [clojure.core.async :as async :refer [go >!]]
-            [com.climate.claypoole :as cp]))
+            [clojure.core.async :as async :refer [go >!]]))
 
 ;; ============================================================================
 ;; Message Transformations
@@ -149,24 +148,27 @@
   "OpenRouter-specific make-request implementation"
   [provider-name transformed-request thread-pool telemetry config]
   (let [url (str (:api-base config "https://openrouter.ai/api/v1") "/chat/completions")]
-    (cp/future thread-pool
-      (let [start-time (System/currentTimeMillis)
-            response (http/post url
-                                {:headers {"Authorization" (str "Bearer " (:api-key config))
-                                           "HTTP-Referer" "https://github.com/unravel-team/litellm-clj"
-                                           "X-Title" "litellm-clj"
-                                           "Content-Type" "application/json"
-                                           "User-Agent" "litellm-clj/1.0.0"}
-                                 :body (json/encode transformed-request)
-                                 :timeout (:timeout config 30000)
-                                 :as :json})
-            duration (- (System/currentTimeMillis) start-time)]
-        
-        ;; Handle errors
-        (when (>= (:status response) 400)
-          (handle-error-response :openrouter response))
-        
-        response))))
+    (errors/wrap-http-errors
+      "openrouter"
+      #(let [start-time (System/currentTimeMillis)
+             response (http/post url
+                                 (conj {:headers {"Authorization" (str "Bearer " (:api-key config))
+                                                  "HTTP-Referer" "https://github.com/unravel-team/litellm-clj"
+                                                  "X-Title" "litellm-clj"
+                                                  "Content-Type" "application/json"
+                                                  "User-Agent" "litellm-clj/1.0.0"}
+                                        :body (json/encode transformed-request)
+                                        :timeout (:timeout config 30000)
+                                        :as :json}
+                                       (when thread-pool
+                                         {:executor thread-pool})))
+             duration (- (System/currentTimeMillis) start-time)]
+         
+         ;; Handle errors if response has error status
+         (when (>= (:status response) 400)
+           (handle-error-response :openrouter response))
+         
+         response))))
 
 (defn transform-response-impl
   "OpenRouter-specific transform-response implementation"
@@ -198,15 +200,16 @@
 (defn health-check-impl
   "OpenRouter-specific health-check implementation"
   [provider-name thread-pool config]
-  (cp/future thread-pool
-    (try
-      (let [response (http/get (str (:api-base config "https://openrouter.ai/api/v1") "/models")
-                              {:headers {"Authorization" (str "Bearer " (:api-key config))}
-                               :timeout 5000})]
-        (= 200 (:status response)))
-      (catch Exception e
-        (log/warn "OpenRouter health check failed" {:error (.getMessage e)})
-        false))))
+  (try
+    (let [response (http/get (str (:api-base config "https://openrouter.ai/api/v1") "/models")
+                            (conj {:headers {"Authorization" (str "Bearer " (:api-key config))}
+                                   :timeout 5000}
+                                  (when thread-pool
+                                    {:executor thread-pool})))]
+      (= 200 (:status response)))
+    (catch Exception e
+      (log/warn "OpenRouter health check failed" {:error (.getMessage e)})
+      false)))
 
 (defn get-cost-per-token-impl
   "OpenRouter-specific get-cost-per-token implementation"

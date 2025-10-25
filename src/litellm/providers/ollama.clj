@@ -4,8 +4,7 @@
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
-            [clojure.string :as str]
-            [com.climate.claypoole :as cp]))
+            [clojure.string :as str]))
 
 ;; ============================================================================
 ;; Message Transformations
@@ -162,22 +161,25 @@
         is-chat (contains? transformed-request :messages)
         url (str (:api-base config "http://localhost:11434") (if is-chat "/api/chat" "/api/generate"))]
     
-    (cp/future thread-pool
-      (let [start-time (System/currentTimeMillis)
-            response (http/post url
-                                {:headers {"Content-Type" "application/json"
-                                           "User-Agent" "litellm-clj/1.0.0"}
-                                 :body (json/encode transformed-request)
-                                 :timeout (:timeout config 30000)
-                                 :as :json})
-            duration (- (System/currentTimeMillis) start-time)]
-        
-        ;; Handle errors
-        (when (>= (:status response) 400)
-          (handle-error-response :ollama response))
-        
-        ;; Add request type to response for later processing
-        (assoc response :ollama-request-type (if is-chat :chat :generate))))))
+    (errors/wrap-http-errors
+      "ollama"
+      #(let [start-time (System/currentTimeMillis)
+             response (http/post url
+                                 (conj {:headers {"Content-Type" "application/json"
+                                                  "User-Agent" "litellm-clj/1.0.0"}
+                                        :body (json/encode transformed-request)
+                                        :timeout (:timeout config 30000)
+                                        :as :json}
+                                       (when thread-pool
+                                         {:executor thread-pool})))
+             duration (- (System/currentTimeMillis) start-time)]
+         
+         ;; Handle errors if response has error status
+         (when (>= (:status response) 400)
+           (handle-error-response :ollama response))
+         
+         ;; Add request type to response for later processing
+         (assoc response :ollama-request-type (if is-chat :chat :generate))))))
 
 (defn transform-response-impl
   "Ollama-specific transform-response implementation"
@@ -208,14 +210,15 @@
 (defn health-check-impl
   "Ollama-specific health-check implementation"
   [provider-name thread-pool config]
-  (cp/future thread-pool
-    (try
-      (let [response (http/get (str (:api-base config "http://localhost:11434") "/api/tags")
-                              {:timeout 5000})]
-        (= 200 (:status response)))
-      (catch Exception e
-        (log/warn "Ollama health check failed" {:error (.getMessage e)})
-        false))))
+  (try
+    (let [response (http/get (str (:api-base config "http://localhost:11434") "/api/tags")
+                            (conj {:timeout 5000}
+                                  (when thread-pool
+                                    {:executor thread-pool})))]
+      (= 200 (:status response)))
+    (catch Exception e
+      (log/warn "Ollama health check failed" {:error (.getMessage e)})
+      false)))
 
 (defn get-cost-per-token-impl
   "Ollama-specific get-cost-per-token implementation"

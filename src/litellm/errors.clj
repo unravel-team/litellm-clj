@@ -9,7 +9,7 @@
   (:require [clojure.string :as str]))
 
 ;; ============================================================================
-;; Error Type Taxonomy
+;; Error Detection Predicates
 ;; ============================================================================
 
 ;; Client/Configuration Errors (4xx-style, user fixable)
@@ -440,6 +440,82 @@
   (when (error-chunk? chunk)
     (ex-info (:message chunk)
              (dissoc chunk :type :message))))
+
+;; ============================================================================
+;; HTTP Error Wrapping
+;; ============================================================================
+
+(defn wrap-http-errors
+  "Wrap HTTP calls to convert hato exceptions to litellm errors.
+  Preserves HTTP response details when available."
+  [provider-name f]
+  (try
+    (f)
+    (catch java.net.SocketTimeoutException e
+      (throw (timeout-error
+               provider-name
+               (or (.getMessage e) "Request timeout")
+               :cause e)))
+    (catch java.net.ConnectException e
+      (throw (connection-error
+               provider-name
+               (or (.getMessage e) "Connection refused")
+               :cause e)))
+    (catch java.net.UnknownHostException e
+      (throw (connection-error
+               provider-name
+               (str "Unknown host: " (.getMessage e))
+               :cause e)))
+    (catch java.io.IOException e
+      (throw (connection-error
+               provider-name
+               (or (.getMessage e) "I/O error")
+               :cause e)))
+    (catch javax.net.ssl.SSLException e
+      (throw (connection-error
+               provider-name
+               (str "SSL error: " (.getMessage e))
+               :cause e)))
+    (catch clojure.lang.ExceptionInfo e
+      ;; Re-throw if already a litellm error
+      (if (litellm-error? e)
+        (throw e)
+        ;; Hato throws ExceptionInfo with HTTP response in ex-data
+        (let [data (ex-data e)]
+          (if-let [status (:status data)]
+            ;; HTTP error from hato - extract response details
+            (let [headers (:headers data)
+                  body-str (:body data)
+                  ;; Try to parse body as JSON
+                  body (if (string? body-str)
+                         (try
+                           (cheshire.core/decode body-str true)
+                           (catch Exception _
+                             body-str))
+                         body-str)
+                  request-id (get headers "x-request-id")
+                  error-info (if (map? body) (get body :error {}) {})
+                  message (or (:message error-info) 
+                             (.getMessage e)
+                             (str "HTTP " status))
+                  provider-code (or (:code error-info) (:type error-info))]
+              (throw (http-status->error 
+                       status 
+                       provider-name 
+                       message
+                       :provider-code provider-code
+                       :request-id request-id
+                       :body body)))
+            ;; Not an HTTP error - wrap as provider error
+            (throw (provider-error
+                     provider-name
+                     (or (.getMessage e) "HTTP error")
+                     :cause e))))))
+    (catch Exception e
+      (throw (provider-error
+              provider-name
+              (or (.getMessage e) "Unexpected error")
+              :cause e)))))
 
 ;; ============================================================================
 ;; HTTP Status Code Mapping
