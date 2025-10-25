@@ -3,6 +3,7 @@
   (:require [clojure.string :as str]
             [clojure.tools.logging :as log]
             [litellm.schemas :as schemas]
+            [litellm.errors :as errors]
             [litellm.providers.openai :as openai]
             [litellm.providers.anthropic :as anthropic]
             [litellm.providers.gemini :as gemini]
@@ -271,21 +272,23 @@
   "Validate request against provider capabilities"
   [provider-name request]
   (when (and (:stream request) (not (supports-streaming? provider-name)))
-    (throw (ex-info "Provider doesn't support streaming" 
-                    {:provider provider-name
-                     :request request})))
+    (throw (errors/unsupported-feature 
+             (name provider-name) 
+             :streaming
+             :message "Provider doesn't support streaming")))
   
   (when (and (or (:tools request) (:functions request)) 
              (not (supports-function-calling? provider-name)))
-    (throw (ex-info "Provider doesn't support function calling"
-                    {:provider provider-name
-                     :request request})))
+    (throw (errors/unsupported-feature 
+             (name provider-name)
+             :function-calling
+             :message "Provider doesn't support function calling")))
   
   (when-not (schemas/valid-request? request)
-    (throw (ex-info "Invalid request format"
-                    {:provider provider-name
-                     :request request
-                     :errors (schemas/explain-request request)}))))
+    (throw (errors/invalid-request
+             "Invalid request format"
+             :request request
+             :errors (schemas/explain-request request)))))
 
 ;; ============================================================================
 ;; Model String Parsing
@@ -385,48 +388,49 @@
    :total-tokens (+ (or prompt-tokens 0) (or completion-tokens 0))})
 
 ;; ============================================================================
-;; Error Handling
+;; Error Handling (Legacy - kept for backward compatibility)
 ;; ============================================================================
 
+;; These functions are now thin wrappers around the new errors namespace
+;; and are kept for backward compatibility. New code should use litellm.errors directly.
+
 (defn provider-error
-  "Create a provider-specific error"
+  "Create a provider-specific error (DEPRECATED - use litellm.errors/provider-error)"
   [provider message & {:keys [status code data]}]
-  (ex-info message
-           (cond-> {:provider (if (keyword? provider) (name provider) (str provider))
-                    :type :provider-error}
-             status (assoc :status status)
-             code (assoc :code code)
-             data (assoc :data data))))
+  (errors/provider-error
+    (if (keyword? provider) (name provider) (str provider))
+    message
+    :http-status status
+    :provider-code code))
 
 (defn rate-limit-error
-  "Create a rate limit error"
+  "Create a rate limit error (DEPRECATED - use litellm.errors/rate-limit)"
   [provider & {:keys [retry-after]}]
-  (provider-error provider "Rate limit exceeded"
-                  :status 429
-                  :code :rate-limit
-                  :data {:retry-after retry-after}))
+  (errors/rate-limit
+    (if (keyword? provider) (name provider) (str provider))
+    "Rate limit exceeded"
+    :retry-after retry-after))
 
 (defn authentication-error
-  "Create an authentication error"
+  "Create an authentication error (DEPRECATED - use litellm.errors/authentication-error)"
   [provider]
-  (provider-error provider "Authentication failed"
-                  :status 401
-                  :code :authentication))
+  (errors/authentication-error
+    (if (keyword? provider) (name provider) (str provider))
+    "Authentication failed"))
 
 (defn model-not-found-error
-  "Create a model not found error"
+  "Create a model not found error (DEPRECATED - use litellm.errors/model-not-found)"
   [provider model]
-  (provider-error provider (str "Model not found: " model)
-                  :status 404
-                  :code :model-not-found
-                  :data {:model model}))
+  (errors/model-not-found
+    (if (keyword? provider) (name provider) (str provider))
+    model))
 
 (defn quota-exceeded-error
-  "Create a quota exceeded error"
+  "Create a quota exceeded error (DEPRECATED - use litellm.errors/quota-exceeded)"
   [provider]
-  (provider-error provider "Quota exceeded"
-                  :status 429
-                  :code :quota-exceeded))
+  (errors/quota-exceeded
+    (if (keyword? provider) (name provider) (str provider))
+    "Quota exceeded"))
 
 ;; ============================================================================
 ;; Provider Discovery
@@ -463,9 +467,10 @@
   "Validate provider configuration"
   [config]
   (when-not (schemas/valid-config? config)
-    (throw (ex-info "Invalid provider configuration"
-                    {:config config
-                     :errors (schemas/explain-config config)})))
+    (throw (errors/invalid-config
+             "Invalid provider configuration"
+             :config config
+             :errors (schemas/explain-config config))))
   config)
 
 ;; ============================================================================

@@ -1,6 +1,7 @@
 (ns litellm.core
   "Core API for LiteLLM - Direct provider calls with model names as-is"
   (:require [clojure.tools.logging :as log]
+            [litellm.errors :as errors]
             [litellm.providers.core :as providers]
             [litellm.providers.openai]    ; Load to register provider
             [litellm.providers.anthropic] ; Load to register provider
@@ -61,9 +62,9 @@
   ([provider-name model request-map config]
    ;; Validate provider exists
    (when-not (provider-available? provider-name)
-     (throw (ex-info "Provider not available"
-                    {:provider provider-name
-                     :available-providers (list-providers)})))
+     (throw (errors/provider-not-found 
+              (name provider-name)
+              :available-providers (list-providers))))
    
    ;; Build full request with model
    (let [request (assoc request-map :model model)]
@@ -204,13 +205,19 @@
   (try
     (f)
     (catch clojure.lang.ExceptionInfo e
-      (let [data (ex-data e)]
-        (case (:type data)
-          :provider-error (log/error "Provider error" data)
-          :rate-limit (log/warn "Rate limit exceeded" data)
-          :authentication (log/error "Authentication failed" data)
-          (log/error "Unknown error" data))
-        (throw e)))
+      (if (errors/litellm-error? e)
+        (let [category (errors/get-error-category e)]
+          (case category
+            :provider-error (log/warn "Provider error" (errors/error-summary e))
+            :client-error (log/error "Client error" (errors/error-summary e))
+            :response-error (log/error "Response error" (errors/error-summary e))
+            :system-error (log/error "System error" (errors/error-summary e))
+            (log/error "Unknown error category" (errors/error-summary e)))
+          (throw e))
+        ;; Non-litellm error
+        (do
+          (log/error "Unexpected error" e)
+          (throw e))))
     (catch Exception e
       (log/error "Unexpected error" e)
       (throw e))))

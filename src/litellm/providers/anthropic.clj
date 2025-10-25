@@ -1,6 +1,7 @@
 (ns litellm.providers.anthropic
   "Anthropic provider implementation for LiteLLM"
   (:require [litellm.streaming :as streaming]
+            [litellm.errors :as errors]
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
@@ -124,26 +125,18 @@
   [provider response]
   (let [status (:status response)
         body (:body response)
-        error-info (get body :error {})]
+        error-info (get body :error {})
+        message (or (:message error-info) "Unknown error")
+        provider-code (:type error-info)
+        request-id (get-in response [:headers "x-request-id"])]
     
-    (case status
-      401 (throw (ex-info "Authentication failed" 
-                          {:type :authentication-error
-                           :provider "anthropic"}))
-      429 (throw (ex-info "Rate limit exceeded" 
-                          {:type :rate-limit-error
-                           :provider "anthropic"
-                           :retry-after (get-in response [:headers "retry-after"])}))
-      404 (throw (ex-info "Model not found" 
-                          {:type :model-not-found-error
-                           :provider "anthropic"
-                           :model (:model body)}))
-      (throw (ex-info (or (:message error-info) "Unknown error")
-                      {:type :provider-error
-                       :provider "anthropic"
-                       :status status
-                       :code (:type error-info)
-                       :data error-info})))))
+    (throw (errors/http-status->error 
+             status 
+             "anthropic" 
+             message
+             :provider-code provider-code
+             :request-id request-id
+             :body body))))
 
 ;; ============================================================================
 ;; Model and Cost Configuration

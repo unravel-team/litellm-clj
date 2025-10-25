@@ -1,6 +1,7 @@
 (ns litellm.providers.ollama
   "Ollama provider implementation for LiteLLM"
-  (:require [hato.client :as http]
+  (:require [litellm.errors :as errors]
+            [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
@@ -75,18 +76,15 @@
   [provider response]
   (let [status (:status response)
         body (:body response)
-        error-msg (or (:error body) "Unknown error")]
+        message (or (:error body) "Unknown error")
+        request-id (get-in response [:headers "x-request-id"])]
     
-    (case status
-      404 (throw (ex-info "Model not found" 
-                          {:type :model-not-found-error
-                           :provider "ollama"
-                           :model (:model body)}))
-      (throw (ex-info error-msg
-                      {:type :provider-error
-                       :provider "ollama"
-                       :status status
-                       :data body})))))
+    (throw (errors/http-status->error 
+             status 
+             "ollama" 
+             message
+             :request-id request-id
+             :body body))))
 
 ;; ============================================================================
 ;; Model and Cost Configuration
