@@ -5,8 +5,7 @@
 The recommended way to use LiteLLM is through the unified `litellm.api` namespace:
 
 ```clojure
-(ns my-app
-  (:require [litellm.api :as llm]))
+(require '[litellm.api :as llm])
 
 ;; One-time setup from environment variables
 (llm/quick-setup!)
@@ -27,14 +26,14 @@ The recommended way to use LiteLLM is through the unified `litellm.api` namespac
 
 ### litellm.api (Recommended)
 
-The unified public API combining registry system with provider operations.
+The unified public API combining router system with provider operations.
 
-**Configuration Registry:**
+**Configuration Router:**
 - `register!` - Register a provider configuration
 - `unregister!` - Remove a configuration
 - `list-configs` - List all registered configs
 - `get-config` - Get a specific config
-- `clear-registry!` - Clear all configs
+- `clear-router!` - Clear all configs
 
 **Provider Discovery:**
 - `list-providers` - List available providers
@@ -84,7 +83,7 @@ System lifecycle and management for advanced features.
 
 ### litellm.config
 
-Low-level configuration registry.
+Low-level configuration router.
 
 **Functions:**
 - `register!` - Register configuration
@@ -194,7 +193,7 @@ Low-level configuration registry.
   (println "LiteLLM configured successfully"))
 
 (defn stop! []
-  (llm/clear-registry!)
+  (llm/clear-router!)
   (reset! config-state nil)
   (println "LiteLLM shutdown complete"))
 

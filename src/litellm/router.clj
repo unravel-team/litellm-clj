@@ -1,11 +1,11 @@
-(ns litellm.registry
-  "Registry-based configuration API for LiteLLM"
+(ns litellm.router
+  "Router-based configuration API for LiteLLM"
   (:require [clojure.tools.logging :as log]
             [litellm.core :as core]
             [litellm.config :as config]))
 
 ;; ============================================================================
-;; Re-export Configuration Registry Functions
+;; Re-export Configuration Router Functions
 ;; ============================================================================
 
 (defn register!
@@ -21,7 +21,7 @@
   (config/register! config-name config-map))
 
 (defn unregister!
-  "Remove a configuration from the registry"
+  "Remove a configuration from the router"
   [config-name]
   (config/unregister! config-name))
 
@@ -35,13 +35,13 @@
   [config-name]
   (config/get-config config-name))
 
-(defn clear-registry!
+(defn clear-router!
   "Clear all registered configurations (useful for testing)"
   []
   (config/clear-registry!))
 
 ;; ============================================================================
-;; Unified Completion API Using Registry
+;; Unified Completion API Using Router
 ;; ============================================================================
 
 (defn completion

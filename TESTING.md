@@ -152,12 +152,12 @@ clojure -M:test:coverage              # Generate coverage
 ### Example: Test with Fixtures
 
 ```clojure
-(defn setup-registry [f]
+(defn setup-router [f]
   (config/clear-registry!)
   (f)
   (config/clear-registry!))
 
-(use-fixtures :each setup-registry)
+(use-fixtures :each setup-router)
 ```
 
 ## Test Coverage by Module
