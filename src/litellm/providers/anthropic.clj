@@ -179,14 +179,19 @@
   (let [model (extract-model-name (:model request))
         mapped-model (get (:model-mapping config default-model-mapping) model model)
         messages-data (transform-messages (:messages request))
+        ;; Anthropic doesn't allow both temperature and top_p - prefer temperature if both are specified
+        has-temperature? (contains? request :temperature)
+        has-top-p? (contains? request :top-p)
         transformed {:model mapped-model
                      :max_tokens (:max-tokens request 1024)
-                     :temperature (:temperature request 0.7)
-                     :top_p (:top-p request 1.0)
                      :stream (:stream request false)}]
     
     ;; Add system prompt, messages, tools if present
+    ;; Only add one of temperature or top_p (Anthropic constraint)
     (cond-> transformed
+      has-temperature? (assoc :temperature (:temperature request))
+      (and has-top-p? (not has-temperature?)) (assoc :top_p (:top-p request))
+      (and (not has-temperature?) (not has-top-p?)) (assoc :temperature 1.0)
       (:system messages-data) (assoc :system (:system messages-data))
       (:messages messages-data) (assoc :messages (:messages messages-data))
       (:tools request) (assoc :tools (transform-tools (:tools request)))
@@ -206,15 +211,16 @@
                                                  "User-Agent" "litellm-clj/1.0.0"}
                                        :body (json/encode transformed-request)
                                        :timeout (:timeout config 30000)
+                                       :async? true                                       
                                        :as :json}
                                       (when thread-pool
                                         {:executor thread-pool})))
             duration (- (System/currentTimeMillis) start-time)]
         
         ;; Handle errors if response has error status
-        (when (>= (:status response) 400)
-          (handle-error-response :anthropic response))
-        
+        (when (>= (:status @response) 400)
+          (handle-error-response :anthropic @response))
+
         response))))
 
 (defn transform-response-impl

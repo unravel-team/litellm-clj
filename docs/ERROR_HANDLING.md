@@ -381,22 +381,3 @@ For library extensions or custom providers:
       (is (= 60000 (errors/retry-delay error 0))))))
 ```
 
-## Migration from Old Error Format
-
-If you have existing code using the old error format:
-
-```clojure
-;; Old format (still works but deprecated)
-(catch clojure.lang.ExceptionInfo e
-  (case (:type (ex-data e))
-    :authentication-error ...
-    :rate-limit-error ...))
-
-;; New format (recommended)
-(catch clojure.lang.ExceptionInfo e
-  (cond
-    (errors/authentication-error? e) ...
-    (errors/rate-limit-error? e) ...))
-```
-
-The library maintains backward compatibility through wrapper functions in `litellm.providers.core`.

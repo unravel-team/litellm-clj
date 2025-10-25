@@ -86,7 +86,6 @@
              transformed-request (providers/transform-request provider-name request merged-config)
              response-future (providers/make-request provider-name transformed-request nil nil merged-config)
              response @response-future]  ; Block and wait for response
-         
          ;; Transform response
          (providers/transform-response provider-name response))))))
 

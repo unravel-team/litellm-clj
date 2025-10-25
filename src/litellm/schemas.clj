@@ -49,22 +49,19 @@
 
 (def Function
   [:map
-   [:function-name FunctionName]
-   [:function-description FunctionDescription]
-   [:function-parameters {:optional true} FunctionParameters]])
-
-(def Functions [:vector Function])
-(def FunctionCall [:or [:enum :auto :none] Function])
+   [:function/name FunctionName]
+   [:function/description FunctionDescription]
+   [:function/parameters {:optional true} FunctionParameters]])
 
 ;; Tools (newer function calling format)
 (def ToolType [:enum "function"])
 (def Tool
   [:map
-   [:tool-type ToolType]
-   [:function Function]])
+   [:type ToolType]
+   [:function {:optional true} :map]])
 
 (def Tools [:vector Tool])
-(def ToolChoice [:or [:enum :auto :none :required]])
+(def ToolChoice [:or [:enum :auto :none :required :any]])
 
 ;; ============================================================================
 ;; Request Schema
@@ -83,8 +80,6 @@
    [:presence-penalty {:optional true} PresencePenalty]
    [:stream {:optional true} Stream]
    [:stop {:optional true} Stop]
-   [:functions {:optional true} Functions]
-   [:function-call {:optional true} FunctionCall]
    [:tools {:optional true} Tools]
    [:tool-choice {:optional true} ToolChoice]])
 

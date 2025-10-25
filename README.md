@@ -83,23 +83,7 @@ Add to your `project.clj`:
 
 ## Quick Start
 
-### Option 1: Direct API (litellm.core)
-
-For simple, direct provider calls:
-
-```clojure
-(require '[litellm.core :as core])
-
-;; Make a completion request
-(def response (core/completion :openai "gpt-4o-mini"
-                {:messages [{:role :user :content "Hello, how are you?"}]}
-                {:api-key (System/getenv "OPENAI_API_KEY")}))
-
-;; Access the response
-(println (core/extract-content response))
-```
-
-### Option 2: Router API (litellm.router)
+### Option 1 : Router API (litellm.router) - Recommended
 
 For configuration-based workflows with named configs:
 
@@ -123,36 +107,22 @@ For configuration-based workflows with named configs:
 (println (router/extract-content response))
 ```
 
-### Advanced: Custom Threadpool Management
+### Option 2: Direct API (litellm.core)
 
-For high-concurrency or custom observability needs, see `examples.system` as a reference implementation.
-
----
-
-## Usage Examples
-
-### Basic Completion
+For simple, direct provider calls:
 
 ```clojure
-(require '[litellm.core :as llm])
+```clojure
+(require '[litellm.core :as core])
 
-;; Simple completion with OpenAI
-(def response (llm/completion :openai "gpt-4o-mini"
-                {:messages [{:role :user :content "Explain quantum computing"}]
-                 :max-tokens 100}
-                {:api-key (System/getenv "OPENAI_API_KEY")}))
-
-;; Extract the content
-(println (llm/extract-content response))
-
-;; Or use provider-specific convenience functions
-(def response2 (llm/openai-completion "gpt-4o-mini"
-                 {:messages [{:role :user :content "What is Clojure?"}]}
-                 :api-key (System/getenv "OPENAI_API_KEY")))
+;; Direct provider calls without registration
+(let [response (core/completion :openai "gpt-4o-mini"
+                                {:messages [{:role :user :content "Hello"}]
+                                 :api-key (System/getenv "OPENAI_API_KEY")})]
+  (println (core/extract-content response)))
 ```
 
 ### Streaming Responses
-
 ```clojure
 (require '[litellm.core :as llm]
          '[litellm.streaming :as streaming]
@@ -190,26 +160,28 @@ For high-concurrency or custom observability needs, see `examples.system` as a r
 
 (def response (llm/completion :openai "gpt-4"
                 {:messages [{:role :user :content "What's the weather in Boston?"}]
-                 :functions [{:name "get_weather"
-                             :description "Get the current weather"
-                             :parameters {:type "object"
-                                         :properties {:location {:type "string"
-                                                                :description "City name"}}
-                                         :required ["location"]}}]}
+                 :tools [{:type "function"
+                         :function {:name "get_weather"
+                                   :description "Get the current weather"
+                                   :parameters {:type "object"
+                                               :properties {:location {:type "string"
+                                                                      :description "City name"}}
+                                               :required ["location"]}}}]}
                 {:api-key (System/getenv "OPENAI_API_KEY")}))
 
 ;; Check for function call
 (let [message (llm/extract-message response)]
-  (when-let [function-call (:function-call message)]
-    (println "Function to call:" (:name function-call))
-    (println "Arguments:" (:arguments function-call))))
+  (when-let [tool-calls (:tool-calls message)]
+    (doseq [tool-call tool-calls]
+       (println "Tool to call:" (get-in tool-call [:function :name]))
+       (println "Arguments:" (get-in tool-call [:function :arguments])))))
 ```
 
 ---
 
 ## Documentation
-
 - **[API Guide](docs/API_GUIDE.md)** - Comprehensive API reference
+- **[Error Handling](docs/ERROR_HANDLING.md)** - Examples related to error handling
 - **[Streaming Guide](docs/STREAMING_GUIDE.md)** - Detailed streaming documentation
 - **[Examples](examples/)** - More code examples
 

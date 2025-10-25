@@ -5,8 +5,7 @@
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
-            [clojure.core.async :as async :refer [go >!]]
-            [com.climate.claypoole :as cp]))
+            [clojure.core.async :as async :refer [go >!]]))
 
 ;; ============================================================================
 ;; Message Transformations
@@ -182,15 +181,16 @@
                                                   "User-Agent" "litellm-clj/1.0.0"}
                                         :body (json/encode transformed-request)
                                         :timeout (:timeout config 30000)
+                                        :async? true
                                         :as :json}
                                        (when thread-pool
                                          {:executor thread-pool})))
              duration (- (System/currentTimeMillis) start-time)]
          
          ;; Handle errors if response has error status (hato may still return response for some 4xx/5xx)
-         (when (>= (:status response) 400)
-           (handle-error-response :openai response))
-         
+         (when (>= (:status @response) 400)
+           (handle-error-response :openai @response))
+
          response))))
 
 (defn transform-response-impl

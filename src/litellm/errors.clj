@@ -6,7 +6,9 @@
   - Rich error data structures with context
   - Error predicates for pattern matching
   - Retry and recoverability analysis"
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [cheshire.core :as json]))
+
 
 ;; ============================================================================
 ;; Error Detection Predicates
@@ -441,6 +443,32 @@
     (ex-info (:message chunk)
              (dissoc chunk :type :message))))
 
+
+;; ============================================================================
+;; HTTP Status Code Mapping
+;; ============================================================================
+
+(defn http-status->error
+  "Map HTTP status code to appropriate error constructor"
+  [status provider message & {:keys [provider-code retry-after request-id body]
+                              :as opts}]
+  (case status
+    400 (invalid-request message :context {:http-status status :body body})
+    401 (authentication-error provider message :http-status status :provider-code provider-code)
+    403 (authorization-error provider message :http-status status :provider-code provider-code)
+    404 (model-not-found provider (or (:model body) "unknown") 
+                        :http-status status :provider-code provider-code)
+    429 (if (and body (str/includes? (str body) "quota"))
+          (quota-exceeded provider message :http-status status :provider-code provider-code)
+          (rate-limit provider message :http-status status :provider-code provider-code 
+                     :retry-after retry-after :request-id request-id))
+    408 (timeout-error provider message :request-id request-id)
+    (500 502 503 504) (server-error provider message :http-status status 
+                                    :provider-code provider-code :request-id request-id)
+    ;; Default to provider error
+    (provider-error provider message :http-status status :provider-code provider-code 
+                   :request-id request-id :recoverable? (>= status 500))))
+
 ;; ============================================================================
 ;; HTTP Error Wrapping
 ;; ============================================================================
@@ -489,7 +517,7 @@
                   ;; Try to parse body as JSON
                   body (if (string? body-str)
                          (try
-                           (cheshire.core/decode body-str true)
+                           (json/parse-string body-str true)
                            (catch Exception _
                              body-str))
                          body-str)
@@ -517,27 +545,4 @@
               (or (.getMessage e) "Unexpected error")
               :cause e)))))
 
-;; ============================================================================
-;; HTTP Status Code Mapping
-;; ============================================================================
 
-(defn http-status->error
-  "Map HTTP status code to appropriate error constructor"
-  [status provider message & {:keys [provider-code retry-after request-id body]
-                              :as opts}]
-  (case status
-    400 (invalid-request message :context {:http-status status :body body})
-    401 (authentication-error provider message :http-status status :provider-code provider-code)
-    403 (authorization-error provider message :http-status status :provider-code provider-code)
-    404 (model-not-found provider (or (:model body) "unknown") 
-                        :http-status status :provider-code provider-code)
-    429 (if (and body (str/includes? (str body) "quota"))
-          (quota-exceeded provider message :http-status status :provider-code provider-code)
-          (rate-limit provider message :http-status status :provider-code provider-code 
-                     :retry-after retry-after :request-id request-id))
-    408 (timeout-error provider message :request-id request-id)
-    (500 502 503 504) (server-error provider message :http-status status 
-                                    :provider-code provider-code :request-id request-id)
-    ;; Default to provider error
-    (provider-error provider message :http-status status :provider-code provider-code 
-                   :request-id request-id :recoverable? (>= status 500))))
