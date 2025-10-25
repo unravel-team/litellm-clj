@@ -32,7 +32,7 @@ LiteLLM Clojure provides a unified, idiomatic Clojure interface for interacting 
 
 **Key Benefits:**
 - Switch between providers without changing your code
-- Built-in async support with proper context propagation
+- Streaming support with core.async channels
 - Comprehensive observability and metrics
 - Thread pool management for optimal performance
 - Cost tracking and token estimation
@@ -99,38 +99,47 @@ Add to your `project.clj`:
 
 ### Option 1: Direct API (litellm.core)
 
+For simple, direct provider calls:
+
 ```clojure
-(require '[litellm.core :as llm])
+(require '[litellm.core :as core])
 
 ;; Make a completion request
-(def response (llm/completion :openai "gpt-4o-mini"
+(def response (core/completion :openai "gpt-4o-mini"
                 {:messages [{:role :user :content "Hello, how are you?"}]}
                 {:api-key (System/getenv "OPENAI_API_KEY")}))
 
 ;; Access the response
-(println (llm/extract-content response))
+(println (core/extract-content response))
 ```
 
-### Option 2: System-based API (litellm.system)
+### Option 2: Router API (litellm.router)
+
+For configuration-based workflows with named configs:
 
 ```clojure
-(require '[litellm.system :as system])
+(require '[litellm.router :as router])
 
-;; Create a system with configuration
-(def sys (system/create-system
-          {:providers {:openai {:api-key (System/getenv "OPENAI_API_KEY")}}
-           :thread-pools {:api-calls {:pool-size 10}}}))
+;; Quick setup from environment variables
+(router/quick-setup!)
 
-;; Make a completion request
-(def response (system/completion sys :openai "gpt-4o-mini"
+;; Or register custom configurations
+(router/register! :fast 
+  {:provider :openai 
+   :model "gpt-4o-mini" 
+   :config {:api-key (System/getenv "OPENAI_API_KEY")}})
+
+;; Use registered configs
+(def response (router/completion :fast 
                 {:messages [{:role :user :content "Hello, how are you?"}]}))
 
 ;; Access the response
-(println (-> response :choices first :message :content))
-
-;; Shutdown the system when done
-(system/shutdown-system! sys)
+(println (router/extract-content response))
 ```
+
+### Advanced: Custom Threadpool Management
+
+For high-concurrency or custom observability needs, see `examples.system` as a reference implementation.
 
 ---
 

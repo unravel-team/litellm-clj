@@ -2,10 +2,10 @@
 
 ## Quick Start
 
-The recommended way to use LiteLLM is through the unified `litellm.api` namespace:
+The recommended way to use LiteLLM is through the `litellm.router` namespace:
 
 ```clojure
-(require '[litellm.api :as llm])
+(require '[litellm.router :as llm])
 
 ;; One-time setup from environment variables
 (llm/quick-setup!)
@@ -22,11 +22,22 @@ The recommended way to use LiteLLM is through the unified `litellm.api` namespac
 (llm/completion :fast {:messages [{:role :user :content "Hello"}]})
 ```
 
+For simple direct provider calls, use `litellm.core`:
+
+```clojure
+(require '[litellm.core :as core])
+
+;; Direct call without configuration
+(core/completion :openai "gpt-4o-mini"
+                 {:messages [{:role :user :content "Hello"}]
+                  :api-key "sk-..."})
+```
+
 ## API Namespaces
 
-### litellm.api (Recommended)
+### litellm.router (Recommended)
 
-The unified public API combining router system with provider operations.
+The primary public API combining configuration management with provider operations.
 
 **Configuration Router:**
 - `register!` - Register a provider configuration
@@ -41,7 +52,7 @@ The unified public API combining router system with provider operations.
 - `provider-info` - Get provider information
 
 **Completion API:**
-- `completion` - Unified completion (works with configs or direct models)
+- `completion` - Unified completion using registered configs
 - `chat` - Simple chat function
 
 **Quick Setup:**
@@ -49,9 +60,11 @@ The unified public API combining router system with provider operations.
 - `setup-openai!` - Configure OpenAI
 - `setup-anthropic!` - Configure Anthropic
 - `setup-ollama!` - Configure Ollama
+- `setup-mistral!` - Configure Mistral
+- `setup-gemini!` - Configure Gemini
+- `setup-openrouter!` - Configure OpenRouter
 
 **Utilities:**
-- `parse-model` - Parse model strings
 - `extract-content` - Extract response content
 - `extract-message` - Extract response message
 - `extract-usage` - Extract token usage
@@ -60,44 +73,35 @@ The unified public API combining router system with provider operations.
 
 ### litellm.core
 
-Provider-focused, system-independent API.
+Direct provider API for simple use cases.
 
 **Functions:**
-- `completion` - Direct completion with model strings
+- `completion` - Direct completion with provider and model
 - `chat` - Simple chat function
 - `list-providers` - Provider discovery
 - `provider-available?` - Check provider availability
-- All utility functions (parse-model, extract-content, etc.)
+- Provider-specific functions: `openai-completion`, `anthropic-completion`, etc.
+- All utility functions (extract-content, estimate-tokens, etc.)
 
-### litellm.system
+### Advanced: Custom Threadpool Management
 
-System lifecycle and management for advanced features.
+For users requiring custom threadpool management, observability, or lifecycle control, see `examples.system` as a reference implementation showing how to build advanced systems using `litellm.threadpool` utilities.
 
-**Functions:**
-- `create-system` - Create LiteLLM system
-- `shutdown-system!` - Shutdown system
-- `completion` - System-based completion (supports streaming)
-- `with-system` - Execute with system context
-- `health-check` - System health checks
-- `test-providers` - Test all providers
-
-### litellm.config
-
-Low-level configuration router.
-
-**Functions:**
-- `register!` - Register configuration
-- `unregister!` - Remove configuration
-- `resolve-config` - Resolve configuration with routing
-- `list-configs` - List all configs
+**Available Utilities (litellm.threadpool):**
+- `create-thread-pools` - Create custom threadpools
+- `pool-health` / `all-pools-health` - Health monitoring
+- `pool-utilization` / `pool-pressure` - Performance metrics
+- `start-pool-monitoring` - Background monitoring with callbacks
+- `pool-performance-report` - Comprehensive metrics
+- `shutdown-pools!` - Graceful shutdown
 
 ## Usage Examples
 
-### Example 1: Quick Script
+### Example 1: Quick Script (Router API)
 
 ```clojure
 (ns my-script
-  (:require [litellm.api :as llm]))
+  (:require [litellm.router :as llm]))
 
 (defn -main []
   (llm/quick-setup!)
@@ -106,11 +110,24 @@ Low-level configuration router.
     (println (llm/extract-content response))))
 ```
 
-### Example 2: Custom Configuration
+### Example 2: Direct Core API (No Configuration)
 
 ```clojure
 (ns my-app
-  (:require [litellm.api :as llm]))
+  (:require [litellm.core :as core]))
+
+;; Direct provider calls without registration
+(let [response (core/completion :openai "gpt-4o-mini"
+                                {:messages [{:role :user :content "Hello"}]
+                                 :api-key (System/getenv "OPENAI_API_KEY")})]
+  (println (core/extract-content response)))
+```
+
+### Example 3: Custom Configuration (Router)
+
+```clojure
+(ns my-app
+  (:require [litellm.router :as llm]))
 
 ;; Register a fast config
 (llm/register! :fast
@@ -129,11 +146,11 @@ Low-level configuration router.
 (llm/chat :premium "Complex analysis task")
 ```
 
-### Example 3: Router Configuration
+### Example 4: Dynamic Router Configuration
 
 ```clojure
 (ns my-app
-  (:require [litellm.api :as llm]))
+  (:require [litellm.router :as llm]))
 
 ;; Smart routing based on request
 (llm/register! :smart
@@ -152,26 +169,11 @@ Low-level configuration router.
    :user-tier :premium})
 ```
 
-### Example 4: Direct Model Strings (No Registry)
-
-```clojure
-(ns my-app
-  (:require [litellm.api :as llm]))
-
-;; Direct completion without registration
-(llm/completion :model "openai/gpt-4"
-                :messages [{:role :user :content "Hello"}]
-                :api-key "sk-...")
-
-;; Also works with chat
-(llm/chat "openai/gpt-4" "Hello!" :api-key "sk-...")
-```
-
 ### Example 5: Long-Running Application
 
 ```clojure
 (ns my-app
-  (:require [litellm.api :as llm]))
+  (:require [litellm.router :as llm]))
 
 (defonce config-state (atom nil))
 
@@ -203,55 +205,35 @@ Low-level configuration router.
      :task-type task-type}))
 ```
 
-### Example 6: With Wrappers (Retry, Timeout, etc.)
+### Example 6: Advanced - Custom Threadpool Management
 
 ```clojure
 (ns my-app
-  (:require [litellm.api :as llm]
-            [litellm.wrappers :as wrap]))
+  (:require [examples.system :as system]
+            [litellm.threadpool :as tp]
+            [clojure.core.async :refer [<!!]]))
 
-;; Setup
-(llm/quick-setup!)
+;; Create custom system with specific threadpool config
+(def my-system 
+  (system/create-system
+    {:providers {:openai {:api-key (System/getenv "OPENAI_API_KEY")}}
+     :thread-pools {:api-calls {:pool-size 100 :queue-size 2000}
+                    :monitoring {:pool-size 5}}}))
 
-;; Use with retry wrapper
-(wrap/with-retry :openai
-  {:messages [{:role :user :content "Hello"}]}
-  llm/completion
-  {:max-attempts 3
-   :backoff-ms 1000})
-
-;; Compose multiple wrappers
-(wrap/compose-wrappers
-  [(partial wrap/with-retry _ _ _ {:max-attempts 3})
-   (partial wrap/with-timeout _ _ _ {:timeout-ms 30000})
-   (partial wrap/with-cost-tracking _ _ _
-     (fn [cost usage resp] 
-       (println "Cost:" cost "USD")))]
-  :openai
-  {:messages [{:role :user :content "Hello"}]}
-  llm/completion)
-```
-
-### Example 7: System-Based (for Streaming)
-
-```clojure
-(ns my-app
-  (:require [litellm.api :as llm]))
-
-;; Create system for advanced features
-(def system (llm/create-system
-              {:providers {"openai" {:provider :openai
-                                     :api-key (System/getenv "OPENAI_API_KEY")}}
-               :thread-pools {:api-calls {:pool-size 50}}}))
-
-;; Use system for streaming
-(llm/system-completion system
-  :model "gpt-4"
-  :messages [{:role :user :content "Hello"}]
-  :stream true)
-
-;; Don't forget to shutdown
-(llm/shutdown-system! system)
+(try
+  ;; Use the system for high-concurrency requests
+  (let [response (system/completion my-system :openai "gpt-4"
+                                    {:messages [{:role :user :content "Hello"}]})]
+    (println (-> response :choices first :message :content)))
+  
+  ;; Monitor threadpool health
+  (println "Pool health:" (tp/all-pools-health (:thread-pools my-system)))
+  
+  ;; Get performance metrics
+  (println "Performance:" (tp/pool-performance-report (:thread-pools my-system)))
+  
+  (finally
+    (system/shutdown-system! my-system)))
 ```
 
 ## Configuration Options
@@ -276,11 +258,11 @@ Low-level configuration router.
 
 ## Best Practices
 
-1. **Use litellm.api** - It's the most convenient and recommended interface
+1. **Use litellm.router** - For configuration-based workflows; use litellm.core for simple direct calls
 2. **Use quick-setup!** - For simple cases, let environment variables configure everything
 3. **Register configs** - Use meaningful names like :fast, :premium, :production
 4. **Use routers** - For dynamic provider selection based on request parameters
-5. **Cost tracking** - Use wrappers to monitor API costs
+5. **Custom threadpools** - Reference examples.system when you need high concurrency or observability
 6. **Error handling** - Use retry wrappers for production reliability
 
 ## Common Patterns

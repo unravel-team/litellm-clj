@@ -1,5 +1,13 @@
-(ns litellm.system
-  "System lifecycle and management for LiteLLM"
+(ns examples.system
+  "EXAMPLE: System lifecycle and management for LiteLLM
+  
+  This namespace demonstrates how to build a full-featured system with:
+  - Custom threadpool configuration and management
+  - Lifecycle management (create/shutdown)
+  - Health monitoring and observability
+  
+  This is a REFERENCE IMPLEMENTATION - not part of the core API.
+  For simple use cases, use litellm.core or litellm.router instead."
   (:require [clojure.tools.logging :as log]
             [litellm.schemas :as schemas]
             [litellm.threadpool :as threadpool]

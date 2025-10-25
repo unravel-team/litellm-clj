@@ -1,7 +1,7 @@
 (ns litellm.core-test
   (:require [clojure.test :refer [deftest testing is]]
             [litellm.core :as core]
-            [litellm.system :as system]
+            [examples.system :as system]
             [litellm.schemas]))
 
 (deftest test-system-lifecycle

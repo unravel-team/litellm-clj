@@ -1,17 +1,19 @@
 (ns examples.system-usage
-  "Example usage of litellm.system - system-based API with lifecycle management"
-  (:require [litellm.system :as system]
+  "Example usage of examples.system - reference implementation with lifecycle management"
+  (:require [examples.system :as system]
             [clojure.core.async :as async :refer [<!!]]))
 
 ;; ============================================================================
-;; litellm.system - System-based API with thread pools and streaming
+;; examples.system - REFERENCE IMPLEMENTATION for advanced features
 ;; ============================================================================
 
-;; System provides:
-;; - Thread pool management for concurrent requests
-;; - Streaming support
-;; - System lifecycle (create, shutdown)
-;; - Health checks and monitoring
+;; This demonstrates how to build custom systems with:
+;; - Custom threadpool configuration and management
+;; - Lifecycle control (create, shutdown)
+;; - Health monitoring and observability
+;; - High-concurrency request handling
+;;
+;; For most use cases, use litellm.core or litellm.router instead.
 
 (defn basic-system-example []
   (println "\n=== Basic System Example ===")
@@ -183,8 +185,8 @@
         (system/shutdown-system! sys)))))
 
 (defn -main []
-  (println "litellm.system Examples")
-  (println "=======================")
+  (println "examples.system - Reference Implementation Examples")
+  (println "===================================================")
   
   (when (System/getenv "OPENAI_API_KEY")
     (basic-system-example)
