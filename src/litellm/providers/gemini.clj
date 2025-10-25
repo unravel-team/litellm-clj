@@ -42,9 +42,10 @@
   (when tools
     {:function_declarations
      (map (fn [tool]
-            {:name (:function-name (:function tool))
-             :description (:function-description (:function tool))
-             :parameters (:function-parameters (:function tool))})
+            (let [func (:function tool)]
+              {:name (:name func)
+               :description (:description func)
+               :parameters (:parameters func)}))
           tools)}))
 
 (defn transform-tool-choice
@@ -84,10 +85,11 @@
   [function-calls]
   (when function-calls
     (map (fn [call]
+
            {:id (str (java.util.UUID/randomUUID))
             :type "function"
             :function {:name (:name call)
-                      :arguments (json/encode (:args call))}})
+                       :arguments (json/encode (:args call))}})
          function-calls)))
 
 (defn transform-candidate
@@ -96,12 +98,12 @@
   (let [content (:content candidate)
         parts (:parts content)
         text-content (str/join (map :text parts))
-        function-calls (when-let [calls (seq (mapcat :function_call parts))]
-                         (transform-tool-calls calls))]
+        tool-calls (when-let [calls (seq (map :functionCall parts))]
+                     (transform-tool-calls calls))]
     {:index 0
      :message {:role :assistant
                :content (when (seq text-content) text-content)
-               :tool-calls function-calls}
+               :tool-calls tool-calls}
      :finish-reason (case (:finish_reason candidate)
                       "STOP" :stop
                       "MAX_TOKENS" :length
@@ -120,9 +122,10 @@
 (defn transform-response
   "Transform Gemini response to standard format"
   [response]
+  (def k* response)
   (let [body (:body response)
         candidates (:candidates body)
-        usage (:usage_metadata body)]
+        usage (:usageMetadata body)]
     {:id (get-in body [:candidates 0 :content :parts 0 :text] (str (java.util.UUID/randomUUID)))
      :object "chat.completion"
      :created (quot (System/currentTimeMillis) 1000)
@@ -210,14 +213,14 @@
                                                   "User-Agent" "litellm-clj/1.0.0"}
                                         :body (json/encode request-body)
                                         :timeout (:timeout config 30000)
+                                        :async? true
                                         :as :json}
                                        (when thread-pool
                                          {:executor thread-pool})))
              duration (- (System/currentTimeMillis) start-time)]
-         
          ;; Handle errors if response has error status
-         (when (>= (:status response) 400)
-           (handle-error-response :gemini response))
+         (when (>= (:status @response) 400)
+           (handle-error-response :gemini @response))
          
          response))))
 

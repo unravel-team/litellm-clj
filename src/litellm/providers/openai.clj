@@ -113,7 +113,6 @@
         message (or (:message error-info) "Unknown error")
         provider-code (:code error-info)
         request-id (get-in response [:headers "x-request-id"])]
-    (println response)
     (throw (errors/http-status->error 
              status 
              "openai" 
