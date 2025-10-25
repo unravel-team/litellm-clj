@@ -44,44 +44,44 @@
 
 (defmulti make-request
   "Make HTTP request to provider API, returns a future"
-  (fn [provider-name transformed-request thread-pools telemetry config] provider-name))
+  (fn [provider-name transformed-request thread-pool telemetry config] provider-name))
 
-(defmethod make-request :openai [provider-name transformed-request thread-pools telemetry config]
-  (openai/make-request-impl provider-name transformed-request thread-pools telemetry config))
+(defmethod make-request :openai [provider-name transformed-request thread-pool telemetry config]
+  (openai/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
-(defmethod make-request :anthropic [provider-name transformed-request thread-pools telemetry config]
-  (anthropic/make-request-impl provider-name transformed-request thread-pools telemetry config))
+(defmethod make-request :anthropic [provider-name transformed-request thread-pool telemetry config]
+  (anthropic/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
-(defmethod make-request :gemini [provider-name transformed-request thread-pools telemetry config]
-  (gemini/make-request-impl provider-name transformed-request thread-pools telemetry config))
+(defmethod make-request :gemini [provider-name transformed-request thread-pool telemetry config]
+  (gemini/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
-(defmethod make-request :mistral [provider-name transformed-request thread-pools telemetry config]
-  (mistral/make-request-impl provider-name transformed-request thread-pools telemetry config))
+(defmethod make-request :mistral [provider-name transformed-request thread-pool telemetry config]
+  (mistral/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
-(defmethod make-request :ollama [provider-name transformed-request thread-pools telemetry config]
-  (ollama/make-request-impl provider-name transformed-request thread-pools telemetry config))
+(defmethod make-request :ollama [provider-name transformed-request thread-pool telemetry config]
+  (ollama/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
-(defmethod make-request :openrouter [provider-name transformed-request thread-pools telemetry config]
-  (openrouter/make-request-impl provider-name transformed-request thread-pools telemetry config))
+(defmethod make-request :openrouter [provider-name transformed-request thread-pool telemetry config]
+  (openrouter/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
 ;; make-streaming-request
 ;; ----------------------------------------------------------------------------
 
 (defmulti make-streaming-request
   "Make streaming HTTP request to provider API, returns a core.async channel"
-  (fn [provider-name transformed-request thread-pools config] provider-name))
+  (fn [provider-name transformed-request thread-pool config] provider-name))
 
-(defmethod make-streaming-request :openai [provider-name transformed-request thread-pools config]
-  (openai/make-streaming-request-impl provider-name transformed-request thread-pools config))
+(defmethod make-streaming-request :openai [provider-name transformed-request thread-pool config]
+  (openai/make-streaming-request-impl provider-name transformed-request thread-pool config))
 
-(defmethod make-streaming-request :anthropic [provider-name transformed-request thread-pools config]
-  (anthropic/make-streaming-request-impl provider-name transformed-request thread-pools config))
+(defmethod make-streaming-request :anthropic [provider-name transformed-request thread-pool config]
+  (anthropic/make-streaming-request-impl provider-name transformed-request thread-pool config))
 
-(defmethod make-streaming-request :gemini [provider-name transformed-request thread-pools config]
-  (gemini/make-streaming-request-impl provider-name transformed-request thread-pools config))
+(defmethod make-streaming-request :gemini [provider-name transformed-request thread-pool config]
+  (gemini/make-streaming-request-impl provider-name transformed-request thread-pool config))
 
-(defmethod make-streaming-request :openrouter [provider-name transformed-request thread-pools config]
-  (openrouter/make-streaming-request-impl provider-name transformed-request thread-pools config))
+(defmethod make-streaming-request :openrouter [provider-name transformed-request thread-pool config]
+  (openrouter/make-streaming-request-impl provider-name transformed-request thread-pool config))
 
 ;; transform-response
 ;; ----------------------------------------------------------------------------
@@ -215,25 +215,25 @@
 
 (defmulti health-check
   "Perform health check, returns a future with boolean result"
-  (fn [provider-name thread-pools config] provider-name))
+  (fn [provider-name thread-pool config] provider-name))
 
-(defmethod health-check :openai [provider-name thread-pools config]
-  (openai/health-check-impl provider-name thread-pools config))
+(defmethod health-check :openai [provider-name thread-pool config]
+  (openai/health-check-impl provider-name thread-pool config))
 
-(defmethod health-check :anthropic [provider-name thread-pools config]
-  (anthropic/health-check-impl provider-name thread-pools config))
+(defmethod health-check :anthropic [provider-name thread-pool config]
+  (anthropic/health-check-impl provider-name thread-pool config))
 
-(defmethod health-check :gemini [provider-name thread-pools config]
-  (gemini/health-check-impl provider-name thread-pools config))
+(defmethod health-check :gemini [provider-name thread-pool config]
+  (gemini/health-check-impl provider-name thread-pool config))
 
-(defmethod health-check :mistral [provider-name thread-pools config]
-  (mistral/health-check-impl provider-name thread-pools config))
+(defmethod health-check :mistral [provider-name thread-pool config]
+  (mistral/health-check-impl provider-name thread-pool config))
 
-(defmethod health-check :ollama [provider-name thread-pools config]
-  (ollama/health-check-impl provider-name thread-pools config))
+(defmethod health-check :ollama [provider-name thread-pool config]
+  (ollama/health-check-impl provider-name thread-pool config))
 
-(defmethod health-check :openrouter [provider-name thread-pools config]
-  (openrouter/health-check-impl provider-name thread-pools config))
+(defmethod health-check :openrouter [provider-name thread-pool config]
+  (openrouter/health-check-impl provider-name thread-pool config))
 
 ;; get-cost-per-token
 ;; ----------------------------------------------------------------------------
@@ -529,14 +529,14 @@
 
 (defn test-provider
   "Test provider with a simple request"
-  [provider-name thread-pools telemetry config]
+  [provider-name thread-pool telemetry config]
   (let [test-request {:model "test"
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 1}]
     (try
       (validate-request provider-name test-request)
       (let [transformed (transform-request provider-name test-request config)
-            response-future (make-request provider-name transformed thread-pools telemetry config)
+            response-future (make-request provider-name transformed thread-pool telemetry config)
             response @response-future
             standard-response (transform-response provider-name response)]
         {:success true

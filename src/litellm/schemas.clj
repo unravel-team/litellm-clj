@@ -185,14 +185,6 @@
    [:pool-size {:optional true} PoolSize]
    [:queue-size {:optional true} QueueSize]])
 
-(def ThreadPoolsConfig
-  [:map
-   [:api-calls {:optional true} ThreadPoolConfig]
-   [:cache-ops {:optional true} ThreadPoolConfig]
-   [:retries {:optional true} ThreadPoolConfig]
-   [:health-checks {:optional true} ThreadPoolConfig]
-   [:monitoring {:optional true} ThreadPoolConfig]])
-
 ;; ============================================================================
 ;; Cache Configuration
 ;; ============================================================================
@@ -215,7 +207,7 @@
   [:map
    [:providers {:optional true} [:map-of :string ProviderConfig]]
    [:router-config {:optional true} RouterConfig]
-   [:thread-pools-config {:optional true} ThreadPoolsConfig]
+   [:thread-pool-config {:optional true} ThreadPoolConfig]
    [:cache-config {:optional true} CacheConfig]])
 
 ;; ============================================================================

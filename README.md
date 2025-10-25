@@ -33,22 +33,8 @@ LiteLLM Clojure provides a unified, idiomatic Clojure interface for interacting 
 **Key Benefits:**
 - Switch between providers without changing your code
 - Streaming support with core.async channels
-- Comprehensive observability and metrics
-- Thread pool management for optimal performance
-- Cost tracking and token estimation
-
----
-
-## Features
-
-- **Unified API**: Single interface for multiple LLM providers
-- **Async Operations**: Non-blocking API calls with proper context propagation
-- **Provider Abstraction**: Easy to add new LLM providers
-- **Health Monitoring**: System health checks and metrics
-- **Cost Tracking**: Built-in token counting and cost estimation
-- **Streaming Support**: Stream responses for better UX
-- **Function Calling**: Support for OpenAI-style function calling
-
+- Router API to switch between models in runtime
+- Function calling support (Alpha)
 ---
 
 ## Model Provider Support
@@ -225,8 +211,6 @@ For high-concurrency or custom observability needs, see `examples.system` as a r
 
 - **[API Guide](docs/API_GUIDE.md)** - Comprehensive API reference
 - **[Streaming Guide](docs/STREAMING_GUIDE.md)** - Detailed streaming documentation
-- **[Migration Guide](docs/MIGRATION_GUIDE.md)** - Migrating from other libraries
-- **[Namespaces](docs/NAMESPACES.md)** - Namespace organization and structure
 - **[Examples](examples/)** - More code examples
 
 ---

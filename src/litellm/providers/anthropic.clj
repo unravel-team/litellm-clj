@@ -202,9 +202,9 @@
 
 (defn make-request-impl
   "Anthropic-specific make-request implementation"
-  [provider-name transformed-request thread-pools telemetry config]
+  [provider-name transformed-request thread-pool telemetry config]
   (let [url (str (:api-base config "https://api.anthropic.com") "/v1/messages")]
-    (cp/future (:api-calls thread-pools)
+    (cp/future thread-pool
       (let [start-time (System/currentTimeMillis)
             response (http/post url
                                 {:headers {"x-api-key" (:api-key config)
@@ -251,8 +251,8 @@
 
 (defn health-check-impl
   "Anthropic-specific health-check implementation"
-  [provider-name thread-pools config]
-  (cp/future (:health-checks thread-pools)
+  [provider-name thread-pool config]
+  (cp/future thread-pool
     (try
       (let [response (http/get (str (:api-base config "https://api.anthropic.com") "/v1/models")
                               {:headers {"x-api-key" (:api-key config)
@@ -326,7 +326,7 @@
 
 (defn make-streaming-request-impl
   "Anthropic-specific make-streaming-request implementation"
-  [provider-name transformed-request thread-pools config]
+  [provider-name transformed-request thread-pool config]
   (let [url (str (:api-base config "https://api.anthropic.com") "/v1/messages")
         output-ch (streaming/create-stream-channel)]
     ;; Use thread instead of go for blocking I/O
@@ -442,13 +442,13 @@
 
 (defn test-anthropic-connection
   "Test Anthropic connection with a simple request"
-  [provider thread-pools telemetry]
+  [provider thread-pool telemetry]
   (let [test-request {:model "claude-3-haiku"
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
       (let [transformed (transform-request-impl :anthropic test-request provider)
-            response-future (make-request-impl :anthropic transformed thread-pools telemetry provider)
+            response-future (make-request-impl :anthropic transformed thread-pool telemetry provider)
             response @response-future
             standard-response (transform-response-impl :anthropic response)]
         {:success true

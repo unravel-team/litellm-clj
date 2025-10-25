@@ -154,9 +154,9 @@
 
 (defn make-request-impl
   "OpenRouter-specific make-request implementation"
-  [provider-name transformed-request thread-pools telemetry config]
+  [provider-name transformed-request thread-pool telemetry config]
   (let [url (str (:api-base config "https://openrouter.ai/api/v1") "/chat/completions")]
-    (cp/future (:api-calls thread-pools)
+    (cp/future thread-pool
       (let [start-time (System/currentTimeMillis)
             response (http/post url
                                 {:headers {"Authorization" (str "Bearer " (:api-key config))
@@ -204,8 +204,8 @@
 
 (defn health-check-impl
   "OpenRouter-specific health-check implementation"
-  [provider-name thread-pools config]
-  (cp/future (:health-checks thread-pools)
+  [provider-name thread-pool config]
+  (cp/future thread-pool
     (try
       (let [response (http/get (str (:api-base config "https://openrouter.ai/api/v1") "/models")
                               {:headers {"Authorization" (str "Bearer " (:api-key config))}
@@ -268,7 +268,7 @@
 
 (defn make-streaming-request-impl
   "OpenRouter-specific make-streaming-request implementation"
-  [provider-name transformed-request thread-pools config]
+  [provider-name transformed-request thread-pool config]
   (let [url (str (:api-base config "https://openrouter.ai/api/v1") "/chat/completions")
         output-ch (streaming/create-stream-channel)]
     (go
@@ -347,13 +347,13 @@
 
 (defn test-openrouter-connection
   "Test OpenRouter connection with a simple request"
-  [provider thread-pools telemetry]
+  [provider thread-pool telemetry]
   (let [test-request {:model "openai/gpt-3.5-turbo"
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
       (let [transformed (transform-request-impl :openrouter test-request provider)
-            response-future (make-request-impl :openrouter transformed thread-pools telemetry provider)
+            response-future (make-request-impl :openrouter transformed thread-pool telemetry provider)
             response @response-future
             standard-response (transform-response-impl :openrouter response)]
         {:success true

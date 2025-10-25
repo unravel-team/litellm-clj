@@ -214,12 +214,12 @@
 
 (defn make-request-impl
   "Gemini-specific make-request implementation"
-  [provider-name transformed-request thread-pools telemetry config]
+  [provider-name transformed-request thread-pool telemetry config]
   (let [model (:model transformed-request)
         url (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/" model ":generateContent")
         ;; Remove :model from the request body - Gemini only uses it in the URL
         request-body (dissoc transformed-request :model)]
-    (cp/future (:api-calls thread-pools)
+    (cp/future thread-pool
       (let [start-time (System/currentTimeMillis)
             response (http/post url
                                 {:headers {"x-goog-api-key" (:api-key config)
@@ -259,8 +259,8 @@
 
 (defn health-check-impl
   "Gemini-specific health-check implementation"
-  [provider-name thread-pools config]
-  (cp/future (:health-checks thread-pools)
+  [provider-name thread-pool config]
+  (cp/future thread-pool
     (try
       (let [response (http/post (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/gemini-2.5-flash-lite:generateContent")
                                 {:headers {"x-goog-api-key" (:api-key config)
@@ -316,7 +316,7 @@
 
 (defn make-streaming-request-impl
   "Gemini-specific make-streaming-request implementation"
-  [provider-name transformed-request thread-pools config]
+  [provider-name transformed-request thread-pool config]
   (let [model (:model transformed-request)
         url (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/" model ":streamGenerateContent")
         request-body (dissoc transformed-request :model)
@@ -404,13 +404,13 @@
 
 (defn test-gemini-connection
   "Test Gemini connection with a simple request"
-  [provider thread-pools telemetry]
+  [provider thread-pool telemetry]
   (let [test-request {:model "gemini-1.5-flash-latest"
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
       (let [transformed (transform-request-impl :gemini test-request provider)
-            response-future (make-request-impl :gemini transformed thread-pools telemetry provider)
+            response-future (make-request-impl :gemini transformed thread-pool telemetry provider)
             response @response-future
             standard-response (transform-response-impl :gemini response)]
         {:success true

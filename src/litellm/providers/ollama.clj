@@ -159,12 +159,12 @@
 
 (defn make-request-impl
   "Ollama-specific make-request implementation"
-  [provider-name transformed-request thread-pools telemetry config]
+  [provider-name transformed-request thread-pool telemetry config]
   (let [model (:model transformed-request)
         is-chat (contains? transformed-request :messages)
         url (str (:api-base config "http://localhost:11434") (if is-chat "/api/chat" "/api/generate"))]
     
-    (cp/future (:api-calls thread-pools)
+    (cp/future thread-pool
       (let [start-time (System/currentTimeMillis)
             response (http/post url
                                 {:headers {"Content-Type" "application/json"
@@ -209,8 +209,8 @@
 
 (defn health-check-impl
   "Ollama-specific health-check implementation"
-  [provider-name thread-pools config]
-  (cp/future (:health-checks thread-pools)
+  [provider-name thread-pool config]
+  (cp/future thread-pool
     (try
       (let [response (http/get (str (:api-base config "http://localhost:11434") "/api/tags")
                               {:timeout 5000})]
@@ -290,13 +290,13 @@
 
 (defn test-ollama-connection
   "Test Ollama connection with a simple request"
-  [provider thread-pools telemetry]
+  [provider thread-pool telemetry]
   (let [test-request {:model "llama2"
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
       (let [transformed (transform-request-impl :ollama test-request provider)
-            response-future (make-request-impl :ollama transformed thread-pools telemetry provider)
+            response-future (make-request-impl :ollama transformed thread-pool telemetry provider)
             response @response-future
             standard-response (transform-response-impl :ollama response)]
         {:success true

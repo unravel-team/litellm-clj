@@ -187,9 +187,9 @@
 
 (defn make-request-impl
   "Mistral-specific make-request implementation"
-  [provider-name transformed-request thread-pools telemetry config]
+  [provider-name transformed-request thread-pool telemetry config]
   (let [url (str (:api-base config "https://api.mistral.ai/v1") "/chat/completions")]
-    (cp/future (:api-calls thread-pools)
+    (cp/future thread-pool
       (let [start-time (System/currentTimeMillis)
             response (http/post url
                                 {:headers {"Authorization" (str "Bearer " (:api-key config))
@@ -235,8 +235,8 @@
 
 (defn health-check-impl
   "Mistral-specific health-check implementation"
-  [provider-name thread-pools config]
-  (cp/future (:health-checks thread-pools)
+  [provider-name thread-pool config]
+  (cp/future thread-pool
     (try
       (let [response (http/get (str (:api-base config "https://api.mistral.ai/v1") "/models")
                               {:headers {"Authorization" (str "Bearer " (:api-key config))}
@@ -303,10 +303,10 @@
 
 (defn make-embedding-request
   "Make embedding request to Mistral API"
-  [provider input model thread-pools]
+  [provider input model thread-pool]
   (let [url (str (:api-base provider) "/embeddings")
         request-body (create-embedding-request input model)]
-    (cp/future (:api-calls thread-pools)
+    (cp/future thread-pool
       (let [response (http/post url
                                {:headers {"Authorization" (str "Bearer " (:api-key provider))
                                           "Content-Type" "application/json"
@@ -365,13 +365,13 @@
 
 (defn test-mistral-connection
   "Test Mistral connection with a simple request"
-  [provider thread-pools telemetry]
+  [provider thread-pool telemetry]
   (let [test-request {:model "mistral-small-latest"
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
       (let [transformed (transform-request-impl :mistral test-request provider)
-            response-future (make-request-impl :mistral transformed thread-pools telemetry provider)
+            response-future (make-request-impl :mistral transformed thread-pool telemetry provider)
             response @response-future
             standard-response (transform-response-impl :mistral response)]
         {:success true
