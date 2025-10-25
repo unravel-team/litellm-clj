@@ -87,7 +87,7 @@ Direct provider API for simple use cases.
 
 For users requiring custom threadpool management, observability, or lifecycle control, see `examples.system` as a reference implementation showing how to build advanced systems using `litellm.threadpool` utilities.
 
-**Available Utilities (litellm.threadpool):**
+**Available Utilities (examples.threadpool):**
 - `create-thread-pools` - Create custom threadpools
 - `pool-health` / `all-pools-health` - Health monitoring
 - `pool-utilization` / `pool-pressure` - Performance metrics

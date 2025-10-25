@@ -10,7 +10,7 @@
   For simple use cases, use litellm.core or litellm.router instead."
   (:require [clojure.tools.logging :as log]
             [litellm.schemas :as schemas]
-            [litellm.threadpool :as threadpool]
+            [examples.threadpool :as threadpool]
             [litellm.providers.core :as providers]
             [com.climate.claypoole :as cp]))
 

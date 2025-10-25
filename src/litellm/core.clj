@@ -8,7 +8,7 @@
             [litellm.providers.mistral]   ; Load to register provider
             [litellm.providers.ollama]    ; Load to register provider
             [litellm.providers.openrouter] ; Load to register provider
-            [litellm.threadpool :as threadpool]))
+            ))
 
 ;; ============================================================================
 ;; Provider Discovery
@@ -29,9 +29,6 @@
   [provider-name]
   (providers/provider-status provider-name))
 
-(def ^:private minimal-thread-pools
-  "Minimal thread pools for streaming support in core"
-  (delay (threadpool/create-thread-pools {:api-calls {:pool-size 5}})))
 
 ;; ============================================================================
 ;; Core Completion API
@@ -80,13 +77,13 @@
        (let [;; Merge API key and other request params into config
              merged-config (merge config (select-keys request [:api-key :api-base :timeout]))
              transformed-request (providers/transform-request provider-name request merged-config)]
-         (providers/make-streaming-request provider-name transformed-request @minimal-thread-pools merged-config))
+         (providers/make-streaming-request provider-name transformed-request nil merged-config))
        
        ;; Non-streaming request - use the provider's make-request
        (let [;; Merge API key and other request params into config
              merged-config (merge config (select-keys request [:api-key :api-base :timeout]))
              transformed-request (providers/transform-request provider-name request merged-config)
-             response-future (providers/make-request provider-name transformed-request @minimal-thread-pools nil merged-config)
+             response-future (providers/make-request provider-name transformed-request nil nil merged-config)
              response @response-future]  ; Block and wait for response
          
          ;; Transform response

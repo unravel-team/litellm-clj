@@ -1,5 +1,11 @@
-(ns litellm.threadpool
-  "Thread pool management using Claypoole for controlled concurrency"
+(ns examples.threadpool
+  "EXAMPLE: Thread pool management using Claypoole for controlled concurrency
+  
+  This is a reference implementation demonstrating how to build custom threadpool
+  management for high-concurrency scenarios. For simple use cases, the core and
+  router APIs handle concurrency automatically.
+  
+  See examples.system for how to use these utilities in a complete system."
   (:require [com.climate.claypoole :as cp]
             [clojure.tools.logging :as log]))
 
