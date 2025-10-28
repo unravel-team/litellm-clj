@@ -14,7 +14,7 @@
 (def Message
   [:map
    [:role Role]
-   [:content :string]
+   [:content {:optional true} :string]  ; Allow nil for assistant messages with tool-calls
    [:name {:optional true} :string]
    [:tool-call-id {:optional true} :string]])
 
