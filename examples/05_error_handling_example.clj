@@ -344,7 +344,7 @@
   
   ;; Test unsupported feature
   (try
-    (llm/completion :ollama "llama2"
+    (llm/completion :anthropic "llama2"
                     {:messages [{:role :user :content "Hi"}]
                      :stream true})  ; Ollama might not support streaming
     (catch clojure.lang.ExceptionInfo e
