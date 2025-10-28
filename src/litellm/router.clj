@@ -11,12 +11,32 @@
 (defn register!
   "Register a provider configuration with a keyword name.
   
-  Configuration can be:
-  - Simple: {:provider :openai :model \\\"gpt-4\\\" :config {...}}
-  - With router: {:router router-fn :configs {...}}
+  Configurations are stored in a registry and can be referenced by name in [[completion]] calls.
   
-  Example:
-    (register! :fast {:provider :openai :model \\\"gpt-4o-mini\\\" :config {:api-key \\\"...\\\"}})"
+  **Configuration Types:**
+  - **Simple:** `{:provider :openai :model \"gpt-4\" :config {...}}`
+  - **With router:** `{:router router-fn :configs {...}}`
+  
+  **Examples:**
+  
+  ```clojure
+  ;; Simple configuration
+  (register! :fast 
+    {:provider :openai 
+     :model \"gpt-4o-mini\" 
+     :config {:api-key \"sk-...\"}})
+  
+  ;; Dynamic router configuration
+  (register! :adaptive
+    {:router (fn [{:keys [priority]}]
+               (if (= priority :high)
+                 {:provider :anthropic :model \"claude-3-opus-20240229\"}
+                 {:provider :openai :model \"gpt-4o-mini\"}))
+     :configs {:openai {:api-key \"sk-...\"}
+               :anthropic {:api-key \"sk-ant-...\"}}})
+  ```
+  
+  **See also:** [[completion]], [[unregister!]], [[list-configs]]"
   [config-name config-map]
   (config/register! config-name config-map))
 
