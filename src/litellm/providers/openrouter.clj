@@ -159,14 +159,15 @@
                                                   "User-Agent" "litellm-clj/1.0.0"}
                                         :body (json/encode transformed-request)
                                         :timeout (:timeout config 30000)
+                                        :async? true
                                         :as :json}
                                        (when thread-pool
                                          {:executor thread-pool})))
              duration (- (System/currentTimeMillis) start-time)]
          
          ;; Handle errors if response has error status
-         (when (>= (:status response) 400)
-           (handle-error-response :openrouter response))
+         (when (>= (:status @response) 400)
+           (handle-error-response :openrouter @response))
          
          response))))
 

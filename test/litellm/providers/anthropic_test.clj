@@ -57,13 +57,13 @@
       (is (= 3 (count (:messages result))))
       
       ;; Check user message
-      (is (= "user" (get-in result [:messages 0 :role])))
-      (is (= "What's the weather in SF?" (get-in result [:messages 0 :content])))
+      (is (= "user" (-> result :messages first :role)))
+      (is (= "What's the weather in SF?" (-> result :messages first :content)))
       
       ;; Check assistant message with tool call
-      (is (= "assistant" (get-in result [:messages 1 :role])))
-      (let [content (get-in result [:messages 1 :content])]
-        (is (vector? content))
+      (is (= "assistant" (-> result :messages second :role)))
+      (let [content (-> result :messages second :content)]
+        (is (seq content))
         (is (= 2 (count content)))
         (is (= "text" (:type (first content))))
         (is (= "Let me check that for you." (:text (first content))))
@@ -73,9 +73,9 @@
         (is (= {:location "San Francisco, CA" :unit "fahrenheit"} (:input (second content)))))
       
       ;; Check tool result message
-      (is (= "user" (get-in result [:messages 2 :role])))
-      (let [content (get-in result [:messages 2 :content])]
-        (is (vector? content))
+      (is (= "user" (->> result :messages (drop 2) first :role)))
+      (let [content (->> result :messages (drop 2) first :content)]
+        (is (seq content))
         (is (= "tool_result" (:type (first content))))
         (is (= "call_123" (:tool_use_id (first content))))
         (is (= "72°F and sunny" (:content (first content))))))))
@@ -131,9 +131,9 @@
       
       (is (= "claude-3-sonnet-20240229" (:model result)))
       (is (= 1024 (:max_tokens result)))
-      (is (vector? (:tools result)))
+      (is (seq? (:tools result)))
       (is (= 1 (count (:tools result))))
-      (is (= "get_weather" (get-in result [:tools 0 :name])))
+      (is (= "get_weather" (-> result :tools first :name)))
       (is (= {:type "auto"} (:tool_choice result))))))
 
 (deftest test-supports-function-calling

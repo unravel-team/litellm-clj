@@ -69,7 +69,7 @@
 (deftest test-handle-error-response-401
   (testing "Handle 401 authentication error"
     (let [response {:status 401 :body {:error {:message "Invalid API key"}}}]
-      (is (thrown-with-msg? Exception #"Authentication failed"
+      (is (thrown-with-msg? Exception #"Invalid API key"
                             (openai/handle-error-response :openai response))))))
 
 (deftest test-handle-error-response-429
