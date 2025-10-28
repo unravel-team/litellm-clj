@@ -4,6 +4,7 @@
             [litellm.errors :as errors]
             [litellm.streaming :as streaming]
             [clojure.tools.logging :as log]
+            [clojure.string :as str]
             [clojure.core.async :refer [<!!]]))
 
 ;; ============================================================================
@@ -76,20 +77,23 @@
   "Retry completion on recoverable errors"
   [provider model request max-retries]
   (loop [attempt 0]
-    (try
-      (llm/completion provider model request)
-      (catch clojure.lang.ExceptionInfo e
-        (if (and (errors/should-retry? e 
-                                       :max-retries max-retries 
-                                       :current-retry attempt)
-                 (< attempt max-retries))
-          (let [delay (errors/retry-delay e attempt)]
-            (log/info "Retrying after" delay "ms"
-                      {:error-type (:type (ex-data e))
-                       :attempt (inc attempt)})
-            (Thread/sleep delay)
-            (recur (inc attempt)))
-          (throw e))))))
+    (let [result (try
+                   (llm/completion provider model request)
+                   (catch clojure.lang.ExceptionInfo e
+                     (if (and (errors/should-retry? e 
+                                                    :max-retries max-retries 
+                                                    :current-retry attempt)
+                              (< attempt max-retries))
+                       {:retry true :error e :attempt attempt}
+                       (throw e))))]
+      (if (:retry result)
+        (let [delay (errors/retry-delay (:error result) attempt)]
+          (log/info "Retrying after" delay "ms"
+                    {:error-type (:type (ex-data (:error result)))
+                     :attempt (inc attempt)})
+          (Thread/sleep delay)
+          (recur (inc attempt)))
+        result))))
 
 (defn retry-example []
   "Example of using retry logic"
@@ -111,26 +115,29 @@
     (loop [attempt 0]
       (let [elapsed (- (System/currentTimeMillis) start-time)]
         ;; Check overall timeout
-        (when (> elapsed timeout-ms)
+        (if (> elapsed timeout-ms)
           (throw (errors/timeout-error 
                    (name provider)
                    "Overall operation timeout"
-                   :timeout-ms timeout-ms)))
-        
-        (try
-          (llm/completion provider model request)
-          (catch clojure.lang.ExceptionInfo e
-            (if (errors/should-retry? e 
-                                      :max-retries max-retries 
-                                      :current-retry attempt)
-              (let [delay (errors/retry-delay e attempt)
-                    remaining (- timeout-ms elapsed)]
+                   :timeout-ms timeout-ms))
+          (let [result (try
+                         (llm/completion provider model request)
+                         (catch clojure.lang.ExceptionInfo e
+                           (if (and (errors/should-retry? e 
+                                                         :max-retries max-retries 
+                                                         :current-retry attempt)
+                                    (< attempt max-retries))
+                             {:retry true :error e :attempt attempt :elapsed elapsed}
+                             (throw e))))]
+            (if (:retry result)
+              (let [delay (errors/retry-delay (:error result) attempt)
+                    remaining (- timeout-ms (:elapsed result))]
                 (if (> delay remaining)
-                  (throw e)  ; Not enough time to retry
+                  (throw (:error result))  ; Not enough time to retry
                   (do
                     (Thread/sleep delay)
                     (recur (inc attempt)))))
-              (throw e))))))))
+              result)))))))
 
 (defn timeout-retry-example []
   "Example with timeout and retry"
@@ -177,22 +184,24 @@
                               :stream true
                               :api-key (System/getenv "OPENAI_API_KEY")})]
       (loop []
-        (when-let [chunk (<!! ch)]
+        (if-let [chunk (<!! ch)]
           (if (streaming/is-error-chunk? chunk)
-            ;; Handle error chunk
+            ;; Handle error chunk and stop
             (do
               (println "\n❌ Streaming error:" (:message chunk))
               (println "   Recoverable?" (:recoverable? chunk))
               (when (:recoverable? chunk)
-                (println "   You can retry this request")))
-            ;; Process normal chunk
+                (println "   You can retry this request"))
+              nil)
+            ;; Process normal chunk and continue
             (do
               (print (streaming/extract-content chunk))
               (flush)
-              (recur))))))
+              (recur)))
+          nil)))
     (catch clojure.lang.ExceptionInfo e
       ;; Synchronous errors (e.g., unsupported feature)
-      (when (errors/unsupported-feature? e)
+      (when (errors/error-type? e :litellm/unsupported-feature)
         (println "Provider doesn't support streaming")))))
 
 (defn streaming-with-callbacks []
@@ -254,25 +263,28 @@
   "Try multiple providers with fallback"
   [model message providers]
   (loop [[provider & rest-providers] providers]
-    (if provider
-      (try
-        (println "Trying provider:" provider)
-        (llm/completion provider model
-                        {:messages [{:role :user :content message}]
-                         :api-key (System/getenv 
-                                    (str (clojure.string/upper-case (name provider)) 
-                                         "_API_KEY"))})
-        (catch clojure.lang.ExceptionInfo e
-          (if (errors/client-error? e)
-            ;; Client error - don't try other providers
-            (throw e)
-            ;; Provider error - try next provider
-            (do
-              (log/warn "Provider" provider "failed:" (errors/error-summary e))
-              (if rest-providers
-                (recur rest-providers)
-                (throw e))))))
-      (throw (ex-info "All providers failed" {})))))
+    (if-not provider
+      (throw (ex-info "All providers failed" {}))
+      (let [result (try
+                     (println "Trying provider:" provider)
+                     (llm/completion provider model
+                                     {:messages [{:role :user :content message}]
+                                      :api-key (System/getenv 
+                                                 (str (str/upper-case (name provider)) 
+                                                      "_API_KEY"))})
+                     (catch clojure.lang.ExceptionInfo e
+                       (if (errors/client-error? e)
+                         ;; Client error - don't try other providers
+                         (throw e)
+                         ;; Provider error - try next provider
+                         (if rest-providers
+                           {:retry true :error e}
+                           (throw e)))))]
+        (if (:retry result)
+          (do
+            (log/warn "Provider" provider "failed:" (errors/error-summary (:error result)))
+            (recur rest-providers))
+          result)))))
 
 (defn fallback-example []
   "Example of provider fallback"
@@ -336,7 +348,7 @@
                     {:messages [{:role :user :content "Hi"}]
                      :stream true})  ; Ollama might not support streaming
     (catch clojure.lang.ExceptionInfo e
-      (when (errors/unsupported-feature? e)
+      (when (errors/error-type? e :litellm/unsupported-feature)
         (println "✅ Unsupported feature detected")))))
 
 ;; ============================================================================

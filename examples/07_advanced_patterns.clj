@@ -10,7 +10,7 @@
 (defn ab-testing-setup []
   "Setup for A/B testing between different models or providers"
   (llm/register! :ab-test
-    {:router (fn [_] 
+    {:router (fn [_]
                (if (< (rand) 0.5)
                  {:provider :openai :model "gpt-4o-mini"}
                  {:provider :anthropic :model "claude-3-haiku-20240307"}))
@@ -24,7 +24,7 @@
   ;; Make multiple requests - they'll randomly use different providers
   (dotimes [i 5]
     (let [response (llm/chat :ab-test "What is 2+2?")]
-      (println (str "Request " (inc i) ": " (llm/extract-content response))))))
+      (println (str "Request " (inc i) ": " (:model response) " : "(llm/extract-content response))))))
 
 ;; ============================================================================
 ;; Cost Optimization Pattern
@@ -35,13 +35,11 @@
   (llm/register! :cost-optimized
     {:router (fn [{:keys [user-tier]}]
                (case user-tier
-                 :free {:provider :ollama :model "llama3"}
                  :basic {:provider :openai :model "gpt-4o-mini"}
                  :premium {:provider :anthropic :model "claude-3-opus-20240229"}
                  {:provider :openai :model "gpt-4o-mini"}))
      :configs {:openai {:api-key (System/getenv "OPENAI_API_KEY")}
-               :anthropic {:api-key (System/getenv "ANTHROPIC_API_KEY")}
-               :ollama {:api-base "http://localhost:11434"}}}))
+               :anthropic {:api-key (System/getenv "ANTHROPIC_API_KEY")}}}))
 
 (defn cost-optimization-example []
   "Example of cost-optimized routing based on user tier"
@@ -50,9 +48,9 @@
   ;; Free user gets local model
   (let [response (llm/completion :cost-optimized
                    {:messages [{:role :user :content "Hello"}]
-                    :user-tier :free
+                    :user-tier :basic
                     :max-tokens 50})]
-    (println "Free tier:" (llm/extract-content response)))
+    (println "Bsic tier: " (:model response) " : " (llm/extract-content response)))
   
   ;; Premium user gets best model
   (when (System/getenv "ANTHROPIC_API_KEY")
@@ -60,7 +58,7 @@
                      {:messages [{:role :user :content "Hello"}]
                       :user-tier :premium
                       :max-tokens 50})]
-      (println "Premium tier:" (llm/extract-content response)))))
+      (println "Premium tier:"  (:model response) " : " (llm/extract-content response)))))
 
 ;; ============================================================================
 ;; Fallback Chain Pattern
