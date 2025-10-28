@@ -1,8 +1,16 @@
 (ns streaming-example
   "Examples demonstrating streaming API usage"
-  (:require [litellm.core :as llm]
+  (:require [litellm.router :as router]
             [clojure.core.async :as async :refer [go-loop <!]]
             [litellm.streaming :as streaming]))
+
+;; ============================================================================
+;; Setup
+;; ============================================================================
+
+;; One-time setup - registers configs from environment variables
+(defn setup! []
+  (router/quick-setup!))
 
 ;; ============================================================================
 ;; Basic Streaming Example
@@ -13,10 +21,14 @@
   []
   (println "=== Basic Streaming Example ===\n")
   
-  ;; Create a streaming request
-  (let [ch (llm/completion :openai "gpt-4"
-                           {:messages [{:role :user :content "Count to 5 slowly"}]
-                            :stream true})]
+  ;; Register a config if not already set up
+  (when-not (seq (router/list-configs))
+    (setup!))
+  
+  ;; Create a streaming request using router
+  (let [ch (router/completion :openai
+                              {:messages [{:role :user :content "Count to 5 slowly"}]
+                               :stream true})]
     
     ;; Consume the channel
     (go-loop []
@@ -39,9 +51,12 @@
   []
   (println "=== Accumulating Streaming Example ===\n")
   
-  (let [ch (llm/completion :openai "gpt-4"
-                           {:messages [{:role :user :content "Write a haiku about Clojure"}]
-                            :stream true})]
+  (when-not (seq (router/list-configs))
+    (setup!))
+  
+  (let [ch (router/completion :openai
+                              {:messages [{:role :user :content "Write a haiku about Clojure"}]
+                               :stream true})]
     
     (go-loop [accumulated ""]
       (if-let [chunk (<! ch)]
@@ -66,14 +81,17 @@
   []
   (println "=== Multiple Concurrent Streams ===\n")
   
+  (when-not (seq (router/list-configs))
+    (setup!))
+  
   (let [questions ["What is Clojure?"
                    "What are monads?"
                    "Explain functional programming"]
         channels (map (fn [q]
-                       (llm/completion :openai "gpt-4"
-                                       {:messages [{:role :user :content q}]
-                                        :stream true
-                                        :max-tokens 50}))
+                       (router/completion :openai
+                                          {:messages [{:role :user :content q}]
+                                           :stream true
+                                           :max-tokens 50}))
                      questions)]
     
     ;; Process each stream
@@ -97,10 +115,15 @@
   []
   (println "=== Error Handling Example ===\n")
   
-  (let [ch (llm/completion :openai "gpt-4"
-                           {:messages [{:role :user :content "Hello"}]
-                            :stream true
-                            :api-key "invalid-key"})]  ; Will cause error
+  ;; Register with invalid key to demonstrate error handling
+  (router/register! :invalid
+    {:provider :openai
+     :model "gpt-4"
+     :config {:api-key "invalid-key"}})
+  
+  (let [ch (router/completion :invalid
+                              {:messages [{:role :user :content "Hello"}]
+                               :stream true})]  ; Will cause error
     
     (go-loop []
       (when-let [chunk (<! ch)]
@@ -120,21 +143,24 @@
 ;; ============================================================================
 
 (defn filtering-example
-  "Example using stream utilities to filter content"
+  "Example using core.async to filter content"
   []
   (println "=== Stream Filtering Example ===\n")
   
-  (let [source (llm/completion :openai "gpt-4"
-                               {:messages [{:role :user :content "Generate numbers: 1, 2, 3, 4, 5"}]
-                                :stream true})
-        ;; Only keep chunks with content
-        filtered (streaming/filter-stream 
-                   source 
-                   #(some? (streaming/extract-content %)))]
+  (when-not (seq (router/list-configs))
+    (setup!))
+  
+  (let [source (router/completion :openai
+                                  {:messages [{:role :user :content "Generate numbers: 1, 2, 3, 4, 5"}]
+                                   :stream true})]
     
+    ;; Filter and process chunks using core.async
     (go-loop []
-      (when-let [chunk (<! filtered)]
-        (println "Chunk:" (streaming/extract-content chunk))
+      (when-let [chunk (<! source)]
+        ;; Only process chunks that have content
+        (when-let [content (streaming/extract-content chunk)]
+          (when (not (clojure.string/blank? content))
+            (println "Chunk:" content)))
         (recur)))))
 
 ;; ============================================================================
@@ -142,18 +168,13 @@
 ;; ============================================================================
 
 (comment
+  ;; First, set up the router (reads from environment variables)
+  (setup!)
+  
   ;; Run individual examples:
   (basic-streaming-example)
   (accumulating-example)
   (multiple-streams-example)
   (error-handling-example)
   (filtering-example)
-  
-  ;; Remember to set your API key:
-  ;; export OPENAI_API_KEY="your-key-here"
-  
-  ;; Or pass it explicitly:
-  (llm/completion :openai "gpt-4"
-                  {:messages [{:role :user :content "Hello"}]
-                   :stream true
-                   :api-key "your-key"}))
+)

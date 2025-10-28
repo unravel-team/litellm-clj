@@ -1,12 +1,12 @@
 (ns litellm.providers.gemini
   "Google Gemini provider implementation for LiteLLM"
   (:require [litellm.streaming :as streaming]
+            [litellm.errors :as errors]
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
-            [clojure.core.async :as async :refer [go >!]]
-            [com.climate.claypoole :as cp]))
+            [clojure.core.async :as async :refer [go >!]]))
 
 ;; ============================================================================
 ;; Message Transformations
@@ -42,9 +42,10 @@
   (when tools
     {:function_declarations
      (map (fn [tool]
-            {:name (:function-name (:function tool))
-             :description (:function-description (:function tool))
-             :parameters (:function-parameters (:function tool))})
+            (let [func (:function tool)]
+              {:name (:name func)
+               :description (:description func)
+               :parameters (:parameters func)}))
           tools)}))
 
 (defn transform-tool-choice
@@ -84,10 +85,11 @@
   [function-calls]
   (when function-calls
     (map (fn [call]
+
            {:id (str (java.util.UUID/randomUUID))
             :type "function"
             :function {:name (:name call)
-                      :arguments (json/encode (:args call))}})
+                       :arguments (json/encode (:args call))}})
          function-calls)))
 
 (defn transform-candidate
@@ -96,12 +98,12 @@
   (let [content (:content candidate)
         parts (:parts content)
         text-content (str/join (map :text parts))
-        function-calls (when-let [calls (seq (mapcat :function_call parts))]
-                         (transform-tool-calls calls))]
+        tool-calls (when-let [calls (seq (map :functionCall parts))]
+                     (transform-tool-calls calls))]
     {:index 0
      :message {:role :assistant
                :content (when (seq text-content) text-content)
-               :tool-calls function-calls}
+               :tool-calls tool-calls}
      :finish-reason (case (:finish_reason candidate)
                       "STOP" :stop
                       "MAX_TOKENS" :length
@@ -122,7 +124,7 @@
   [response]
   (let [body (:body response)
         candidates (:candidates body)
-        usage (:usage_metadata body)]
+        usage (:usageMetadata body)]
     {:id (get-in body [:candidates 0 :content :parts 0 :text] (str (java.util.UUID/randomUUID)))
      :object "chat.completion"
      :created (quot (System/currentTimeMillis) 1000)
@@ -139,36 +141,18 @@
   [provider response]
   (let [status (:status response)
         body (:body response)
-        error-info (get body :error {})]
+        error-info (get body :error {})
+        message (or (:message error-info) "Unknown error")
+        provider-code (:code error-info)
+        request-id (get-in response [:headers "x-request-id"])]
     
-    (case status
-      400 (throw (ex-info (or (:message error-info) "Bad request")
-                          {:type :bad-request-error
-                           :provider "gemini"
-                           :details error-info}))
-      401 (throw (ex-info "Authentication failed"
-                          {:type :authentication-error
-                           :provider "gemini"}))
-      403 (throw (ex-info "Permission denied"
-                          {:type :permission-error
-                           :provider "gemini"}))
-      404 (throw (ex-info "Model not found"
-                          {:type :model-not-found-error
-                           :provider "gemini"
-                           :model (get-in body [:error :details :model])}))
-      429 (throw (ex-info "Rate limit exceeded"
-                          {:type :rate-limit-error
-                           :provider "gemini"
-                           :retry-after (get-in response [:headers "retry-after"])}))
-      500 (throw (ex-info "Internal server error"
-                          {:type :server-error
-                           :provider "gemini"}))
-      (throw (ex-info (or (:message error-info) "Unknown error")
-                      {:type :provider-error
-                       :provider "gemini"
-                       :status status
-                       :code (:code error-info)
-                       :data error-info})))))
+    (throw (errors/http-status->error 
+             status 
+             "gemini" 
+             message
+             :provider-code provider-code
+             :request-id request-id
+             :body body))))
 
 ;; ============================================================================
 ;; Model and Cost Configuration
@@ -214,27 +198,30 @@
 
 (defn make-request-impl
   "Gemini-specific make-request implementation"
-  [provider-name transformed-request thread-pools telemetry config]
+  [provider-name transformed-request thread-pool telemetry config]
   (let [model (:model transformed-request)
         url (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/" model ":generateContent")
         ;; Remove :model from the request body - Gemini only uses it in the URL
         request-body (dissoc transformed-request :model)]
-    (cp/future (:api-calls thread-pools)
-      (let [start-time (System/currentTimeMillis)
-            response (http/post url
-                                {:headers {"x-goog-api-key" (:api-key config)
-                                           "Content-Type" "application/json"
-                                           "User-Agent" "litellm-clj/1.0.0"}
-                                 :body (json/encode request-body)
-                                 :timeout (:timeout config 30000)
-                                 :as :json})
-            duration (- (System/currentTimeMillis) start-time)]
-        
-        ;; Handle errors
-        (when (>= (:status response) 400)
-          (handle-error-response :gemini response))
-        
-        response))))
+    (errors/wrap-http-errors
+      "gemini"
+      #(let [start-time (System/currentTimeMillis)
+             response (http/post url
+                                 (conj {:headers {"x-goog-api-key" (:api-key config)
+                                                  "Content-Type" "application/json"
+                                                  "User-Agent" "litellm-clj/1.0.0"}
+                                        :body (json/encode request-body)
+                                        :timeout (:timeout config 30000)
+                                        :async? true
+                                        :as :json}
+                                       (when thread-pool
+                                         {:executor thread-pool})))
+             duration (- (System/currentTimeMillis) start-time)]
+         ;; Handle errors if response has error status
+         (when (>= (:status @response) 400)
+           (handle-error-response :gemini @response))
+         
+         response))))
 
 (defn transform-response-impl
   "Gemini-specific transform-response implementation"
@@ -259,21 +246,22 @@
 
 (defn health-check-impl
   "Gemini-specific health-check implementation"
-  [provider-name thread-pools config]
-  (cp/future (:health-checks thread-pools)
-    (try
-      (let [response (http/post (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/gemini-2.5-flash-lite:generateContent")
-                                {:headers {"x-goog-api-key" (:api-key config)
-                                           "Content-Type" "application/json"
-                                           "User-Agent" "litellm-clj/1.0.0"}
-                                 :body (json/encode {:contents [{:role "user" :parts [{:text "hi"}]}]
-                                                    :generation_config {:maxOutputTokens 1}})
-                                 :timeout 5000
-                                 :as :json})]
-        (= 200 (:status response)))
-      (catch Exception e
-        (log/warn "Gemini health check failed" {:error (.getMessage e)})
-        false))))
+  [provider-name thread-pool config]
+  (try
+    (let [response (http/post (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/gemini-2.5-flash-lite:generateContent")
+                              (conj {:headers {"x-goog-api-key" (:api-key config)
+                                               "Content-Type" "application/json"
+                                               "User-Agent" "litellm-clj/1.0.0"}
+                                     :body (json/encode {:contents [{:role "user" :parts [{:text "hi"}]}]
+                                                        :generation_config {:maxOutputTokens 1}})
+                                     :timeout 5000
+                                     :as :json}
+                                    (when thread-pool
+                                      {:executor thread-pool})))]
+      (= 200 (:status response)))
+    (catch Exception e
+      (log/warn "Gemini health check failed" {:error (.getMessage e)})
+      false)))
 
 (defn get-cost-per-token-impl
   "Gemini-specific get-cost-per-token implementation"
@@ -316,7 +304,7 @@
 
 (defn make-streaming-request-impl
   "Gemini-specific make-streaming-request implementation"
-  [provider-name transformed-request thread-pools config]
+  [provider-name transformed-request thread-pool config]
   (let [model (:model transformed-request)
         url (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models/" model ":streamGenerateContent")
         request-body (dissoc transformed-request :model)
@@ -404,13 +392,13 @@
 
 (defn test-gemini-connection
   "Test Gemini connection with a simple request"
-  [provider thread-pools telemetry]
+  [provider thread-pool telemetry]
   (let [test-request {:model "gemini-1.5-flash-latest"
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
       (let [transformed (transform-request-impl :gemini test-request provider)
-            response-future (make-request-impl :gemini transformed thread-pools telemetry provider)
+            response-future (make-request-impl :gemini transformed thread-pool telemetry provider)
             response @response-future
             standard-response (transform-response-impl :gemini response)]
         {:success true

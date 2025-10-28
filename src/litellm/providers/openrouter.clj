@@ -1,10 +1,12 @@
 (ns litellm.providers.openrouter
   "OpenRouter provider implementation for LiteLLM"
-  (:require [hato.client :as http]
+  (:require [litellm.streaming :as streaming]
+            [litellm.errors :as errors]
+            [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
-            [com.climate.claypoole :as cp]))
+            [clojure.core.async :as async :refer [go >!]]))
 
 ;; ============================================================================
 ;; Message Transformations
@@ -26,8 +28,11 @@
   [tools]
   (when tools
     (map (fn [tool]
-           {:type (:tool-type tool "function")
-            :function (select-keys (:function tool) [:name :description :parameters])})
+           (let [func (:function tool)]
+             {:type (:tool-type tool "function")
+              :function {:name (or (:function-name func) (:name func))
+                        :description (or (:function-description func) (:description func))
+                        :parameters (or (:function-parameters func) (:parameters func))}}))
          tools)))
 
 (defn transform-tool-choice
@@ -84,26 +89,18 @@
   [provider response]
   (let [status (:status response)
         body (:body response)
-        error-info (get body :error {})]
+        error-info (get body :error {})
+        message (or (:message error-info) "Unknown error")
+        provider-code (:code error-info)
+        request-id (get-in response [:headers "x-request-id"])]
     
-    (case status
-      401 (throw (ex-info "Authentication failed" 
-                          {:type :authentication-error
-                           :provider "openrouter"}))
-      429 (throw (ex-info "Rate limit exceeded" 
-                          {:type :rate-limit-error
-                           :provider "openrouter"
-                           :retry-after (get-in response [:headers "retry-after"])}))
-      404 (throw (ex-info "Model not found" 
-                          {:type :model-not-found-error
-                           :provider "openrouter"
-                           :model (:model body)}))
-      (throw (ex-info (or (:message error-info) "Unknown error")
-                      {:type :provider-error
-                       :provider "openrouter"
-                       :status status
-                       :code (:code error-info)
-                       :data error-info})))))
+    (throw (errors/http-status->error 
+             status 
+             "openrouter" 
+             message
+             :provider-code provider-code
+             :request-id request-id
+             :body body))))
 
 ;; ============================================================================
 ;; Model and Cost Configuration
@@ -149,26 +146,30 @@
 
 (defn make-request-impl
   "OpenRouter-specific make-request implementation"
-  [provider-name transformed-request thread-pools telemetry config]
+  [provider-name transformed-request thread-pool telemetry config]
   (let [url (str (:api-base config "https://openrouter.ai/api/v1") "/chat/completions")]
-    (cp/future (:api-calls thread-pools)
-      (let [start-time (System/currentTimeMillis)
-            response (http/post url
-                                {:headers {"Authorization" (str "Bearer " (:api-key config))
-                                           "HTTP-Referer" "https://github.com/unravel-team/litellm-clj"
-                                           "X-Title" "litellm-clj"
-                                           "Content-Type" "application/json"
-                                           "User-Agent" "litellm-clj/1.0.0"}
-                                 :body (json/encode transformed-request)
-                                 :timeout (:timeout config 30000)
-                                 :as :json})
-            duration (- (System/currentTimeMillis) start-time)]
-        
-        ;; Handle errors
-        (when (>= (:status response) 400)
-          (handle-error-response :openrouter response))
-        
-        response))))
+    (errors/wrap-http-errors
+      "openrouter"
+      #(let [start-time (System/currentTimeMillis)
+             response (http/post url
+                                 (conj {:headers {"Authorization" (str "Bearer " (:api-key config))
+                                                  "HTTP-Referer" "https://github.com/unravel-team/litellm-clj"
+                                                  "X-Title" "litellm-clj"
+                                                  "Content-Type" "application/json"
+                                                  "User-Agent" "litellm-clj/1.0.0"}
+                                        :body (json/encode transformed-request)
+                                        :timeout (:timeout config 30000)
+                                        :async? true
+                                        :as :json}
+                                       (when thread-pool
+                                         {:executor thread-pool})))
+             duration (- (System/currentTimeMillis) start-time)]
+         
+         ;; Handle errors if response has error status
+         (when (>= (:status @response) 400)
+           (handle-error-response :openrouter @response))
+         
+         response))))
 
 (defn transform-response-impl
   "OpenRouter-specific transform-response implementation"
@@ -199,16 +200,17 @@
 
 (defn health-check-impl
   "OpenRouter-specific health-check implementation"
-  [provider-name thread-pools config]
-  (cp/future (:health-checks thread-pools)
-    (try
-      (let [response (http/get (str (:api-base config "https://openrouter.ai/api/v1") "/models")
-                              {:headers {"Authorization" (str "Bearer " (:api-key config))}
-                               :timeout 5000})]
-        (= 200 (:status response)))
-      (catch Exception e
-        (log/warn "OpenRouter health check failed" {:error (.getMessage e)})
-        false))))
+  [provider-name thread-pool config]
+  (try
+    (let [response (http/get (str (:api-base config "https://openrouter.ai/api/v1") "/models")
+                            (conj {:headers {"Authorization" (str "Bearer " (:api-key config))}
+                                   :timeout 5000}
+                                  (when thread-pool
+                                    {:executor thread-pool})))]
+      (= 200 (:status response)))
+    (catch Exception e
+      (log/warn "OpenRouter health check failed" {:error (.getMessage e)})
+      false)))
 
 (defn get-cost-per-token-impl
   "OpenRouter-specific get-cost-per-token implementation"
@@ -246,14 +248,65 @@
                :finish-reason (when (:finish_reason choice)
                                (keyword (:finish_reason choice)))}]}))
 
-(defn handle-streaming-response
-  "Handle streaming response from OpenRouter"
-  [response callback]
-  (let [body (:body response)]
-    (doseq [line (str/split-lines body)]
-      (when-let [parsed (parse-sse-line line)]
-        (let [transformed (transform-streaming-chunk parsed)]
-          (callback transformed))))))
+(defn transform-streaming-chunk-impl
+  "OpenRouter-specific transform-streaming-chunk implementation"
+  [provider-name chunk]
+  (let [choice (first (:choices chunk))
+        delta (:delta choice)]
+    {:id (:id chunk)
+     :object (:object chunk)
+     :created (:created chunk)
+     :model (:model chunk)
+     :choices [{:index (:index choice)
+               :delta {:role (keyword (:role delta))
+                      :content (:content delta)}
+               :finish-reason (when (:finish_reason choice)
+                               (keyword (:finish_reason choice)))}]}))
+
+(defn make-streaming-request-impl
+  "OpenRouter-specific make-streaming-request implementation"
+  [provider-name transformed-request thread-pool config]
+  (let [url (str (:api-base config "https://openrouter.ai/api/v1") "/chat/completions")
+        output-ch (streaming/create-stream-channel)]
+    (go
+      (try
+        (let [response (http/post url
+                                  {:headers {"Authorization" (str "Bearer " (:api-key config))
+                                             "HTTP-Referer" "https://github.com/unravel-team/litellm-clj"
+                                             "X-Title" "litellm-clj"
+                                             "Content-Type" "application/json"
+                                             "User-Agent" "litellm-clj/1.0.0"}
+                                   :body (json/encode transformed-request)
+                                   :timeout (:timeout config 30000)
+                                   :as :stream})]
+          
+          ;; Handle errors
+          (when (>= (:status response) 400)
+            (>! output-ch (streaming/stream-error "openrouter" 
+                                                  (str "HTTP " (:status response))
+                                                  :status (:status response)))
+            (streaming/close-stream! output-ch))
+          
+          ;; Process streaming response
+          (when (= 200 (:status response))
+            (let [body (:body response)
+                  reader (java.io.BufferedReader. 
+                          (java.io.InputStreamReader. body "UTF-8"))]
+              (loop []
+                (when-let [line (.readLine reader)]
+                  (when-let [parsed (streaming/parse-sse-line line json/decode)]
+                    (let [transformed (transform-streaming-chunk-impl :openrouter parsed)]
+                      (>! output-ch transformed)))
+                  (recur)))
+              (.close reader)
+              (streaming/close-stream! output-ch))))
+        
+        (catch Exception e
+          (log/error "Error in streaming request" {:error (.getMessage e)})
+          (>! output-ch (streaming/stream-error "openrouter" (.getMessage e)))
+          (streaming/close-stream! output-ch))))
+    
+    output-ch))
 
 ;; ============================================================================
 ;; Utility Functions
@@ -291,13 +344,13 @@
 
 (defn test-openrouter-connection
   "Test OpenRouter connection with a simple request"
-  [provider thread-pools telemetry]
+  [provider thread-pool telemetry]
   (let [test-request {:model "openai/gpt-3.5-turbo"
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
       (let [transformed (transform-request-impl :openrouter test-request provider)
-            response-future (make-request-impl :openrouter transformed thread-pools telemetry provider)
+            response-future (make-request-impl :openrouter transformed thread-pool telemetry provider)
             response @response-future
             standard-response (transform-response-impl :openrouter response)]
         {:success true

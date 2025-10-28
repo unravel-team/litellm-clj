@@ -1,10 +1,10 @@
 (ns litellm.providers.mistral
   "Mistral AI provider implementation for LiteLLM"
-  (:require [hato.client :as http]
+  (:require [litellm.errors :as errors]
+            [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
-            [clojure.string :as str]
-            [com.climate.claypoole :as cp]))
+            [clojure.string :as str]))
 
 ;; ============================================================================
 ;; Message Transformations
@@ -99,26 +99,18 @@
   [provider response]
   (let [status (:status response)
         body (:body response)
-        error-info (get body :error {})]
+        error-info (get body :error {})
+        message (or (:message error-info) "Unknown error")
+        provider-code (:code error-info)
+        request-id (get-in response [:headers "x-request-id"])]
     
-    (case status
-      401 (throw (ex-info "Authentication failed" 
-                          {:type :authentication-error
-                           :provider "mistral"}))
-      429 (throw (ex-info "Rate limit exceeded" 
-                          {:type :rate-limit-error
-                           :provider "mistral"
-                           :retry-after (get-in response [:headers "retry-after"])}))
-      404 (throw (ex-info "Model not found" 
-                          {:type :model-not-found-error
-                           :provider "mistral"
-                           :model (:model body)}))
-      (throw (ex-info (or (:message error-info) "Unknown error")
-                      {:type :provider-error
-                       :provider "mistral"
-                       :status status
-                       :code (:code error-info)
-                       :data error-info})))))
+    (throw (errors/http-status->error 
+             status 
+             "mistral" 
+             message
+             :provider-code provider-code
+             :request-id request-id
+             :body body))))
 
 ;; ============================================================================
 ;; Model and Cost Configuration
@@ -187,24 +179,27 @@
 
 (defn make-request-impl
   "Mistral-specific make-request implementation"
-  [provider-name transformed-request thread-pools telemetry config]
+  [provider-name transformed-request thread-pool telemetry config]
   (let [url (str (:api-base config "https://api.mistral.ai/v1") "/chat/completions")]
-    (cp/future (:api-calls thread-pools)
-      (let [start-time (System/currentTimeMillis)
-            response (http/post url
-                                {:headers {"Authorization" (str "Bearer " (:api-key config))
-                                           "Content-Type" "application/json"
-                                           "User-Agent" "litellm-clj/1.0.0"}
-                                 :body (json/encode transformed-request)
-                                 :timeout (:timeout config 30000)
-                                 :as :json})
-            duration (- (System/currentTimeMillis) start-time)]
-        
-        ;; Handle errors
-        (when (>= (:status response) 400)
-          (handle-error-response :mistral response))
-        
-        response))))
+    (errors/wrap-http-errors
+      "mistral"
+      #(let [start-time (System/currentTimeMillis)
+             response (http/post url
+                                 (conj {:headers {"Authorization" (str "Bearer " (:api-key config))
+                                                  "Content-Type" "application/json"
+                                                  "User-Agent" "litellm-clj/1.0.0"}
+                                        :body (json/encode transformed-request)
+                                        :timeout (:timeout config 30000)
+                                        :as :json}
+                                       (when thread-pool
+                                         {:executor thread-pool})))
+             duration (- (System/currentTimeMillis) start-time)]
+         
+         ;; Handle errors if response has error status
+         (when (>= (:status response) 400)
+           (handle-error-response :mistral response))
+         
+         response))))
 
 (defn transform-response-impl
   "Mistral-specific transform-response implementation"
@@ -235,16 +230,17 @@
 
 (defn health-check-impl
   "Mistral-specific health-check implementation"
-  [provider-name thread-pools config]
-  (cp/future (:health-checks thread-pools)
-    (try
-      (let [response (http/get (str (:api-base config "https://api.mistral.ai/v1") "/models")
-                              {:headers {"Authorization" (str "Bearer " (:api-key config))}
-                               :timeout 5000})]
-        (= 200 (:status response)))
-      (catch Exception e
-        (log/warn "Mistral health check failed" {:error (.getMessage e)})
-        false))))
+  [provider-name thread-pool config]
+  (try
+    (let [response (http/get (str (:api-base config "https://api.mistral.ai/v1") "/models")
+                            (conj {:headers {"Authorization" (str "Bearer " (:api-key config))}
+                                   :timeout 5000}
+                                  (when thread-pool
+                                    {:executor thread-pool})))]
+      (= 200 (:status response)))
+    (catch Exception e
+      (log/warn "Mistral health check failed" {:error (.getMessage e)})
+      false)))
 
 (defn get-cost-per-token-impl
   "Mistral-specific get-cost-per-token implementation"
@@ -303,31 +299,30 @@
 
 (defn make-embedding-request
   "Make embedding request to Mistral API"
-  [provider input model thread-pools]
+  [provider input model thread-pool]
   (let [url (str (:api-base provider) "/embeddings")
-        request-body (create-embedding-request input model)]
-    (cp/future (:api-calls thread-pools)
-      (let [response (http/post url
-                               {:headers {"Authorization" (str "Bearer " (:api-key provider))
-                                          "Content-Type" "application/json"
-                                          "User-Agent" "litellm-clj/1.0.0"}
-                                :body (json/encode request-body)
-                                :timeout (:timeout provider 30000)
-                                :as :json})]
-        
-        ;; Handle errors
-        (when (>= (:status response) 400)
-          (handle-error-response provider response))
-        
-        (let [body (:body response)]
-          {:object (:object body)
-           :data (map (fn [item]
-                       {:object (:object item)
-                        :embedding (:embedding item)
-                        :index (:index item)})
-                     (:data body))
-           :model (:model body)
-           :usage (transform-usage (:usage body))})))))
+        request-body (create-embedding-request input model)
+        response (http/post url
+                            {:headers {"Authorization" (str "Bearer " (:api-key provider))
+                                       "Content-Type" "application/json"
+                                       "User-Agent" "litellm-clj/1.0.0"}
+                             :body (json/encode request-body)
+                             :timeout (:timeout provider 30000)
+                             :as :json})]
+    
+    ;; Handle errors
+    (when (>= (:status response) 400)
+      (handle-error-response provider response))
+    
+    (let [body (:body response)]
+      {:object (:object body)
+       :data (map (fn [item]
+                    {:object (:object item)
+                     :embedding (:embedding item)
+                     :index (:index item)})
+                  (:data body))
+       :model (:model body)
+       :usage (transform-usage (:usage body))})))
 
 ;; ============================================================================
 ;; Utility Functions
@@ -365,13 +360,13 @@
 
 (defn test-mistral-connection
   "Test Mistral connection with a simple request"
-  [provider thread-pools telemetry]
+  [provider thread-pool telemetry]
   (let [test-request {:model "mistral-small-latest"
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
       (let [transformed (transform-request-impl :mistral test-request provider)
-            response-future (make-request-impl :mistral transformed thread-pools telemetry provider)
+            response-future (make-request-impl :mistral transformed thread-pool telemetry provider)
             response @response-future
             standard-response (transform-response-impl :mistral response)]
         {:success true

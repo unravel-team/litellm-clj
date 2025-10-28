@@ -2,7 +2,8 @@
   "Core streaming utilities for LiteLLM"
   (:require [clojure.core.async :as async :refer [chan close! go-loop <! >!]]
             [clojure.string :as str]
-            [clojure.tools.logging :as log]))
+            [clojure.tools.logging :as log]
+            [litellm.errors :as errors]))
 
 ;; ============================================================================
 ;; Channel Management
@@ -32,20 +33,22 @@
 (defn stream-error
   "Create an error chunk for streaming.
   
-  Error chunks are special messages placed on the channel to signal errors."
-  [provider message & {:keys [status code data]}]
-  (cond-> {:type :error
-           :error-type :provider-error
-           :provider provider
-           :message message}
-    status (assoc :status status)
-    code (assoc :code code)
-    data (assoc :data data)))
+  Error chunks are special messages placed on the channel to signal errors.
+  
+  This is a convenience wrapper around litellm.errors/streaming-error-chunk."
+  [provider message & {:keys [status code data error-type recoverable?]}]
+  (errors/streaming-error-chunk
+    provider
+    message
+    :error-type (or error-type :litellm/streaming-error)
+    :http-status status
+    :provider-code code
+    :recoverable? recoverable?))
 
 (defn is-error-chunk?
   "Check if a chunk is an error chunk."
   [chunk]
-  (= :error (:type chunk)))
+  (errors/error-chunk? chunk))
 
 ;; ============================================================================
 ;; Content Extraction

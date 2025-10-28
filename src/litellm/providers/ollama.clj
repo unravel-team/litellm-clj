@@ -1,10 +1,10 @@
 (ns litellm.providers.ollama
   "Ollama provider implementation for LiteLLM"
-  (:require [hato.client :as http]
+  (:require [litellm.errors :as errors]
+            [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
-            [clojure.string :as str]
-            [com.climate.claypoole :as cp]))
+            [clojure.string :as str]))
 
 ;; ============================================================================
 ;; Message Transformations
@@ -75,18 +75,15 @@
   [provider response]
   (let [status (:status response)
         body (:body response)
-        error-msg (or (:error body) "Unknown error")]
+        message (or (:error body) "Unknown error")
+        request-id (get-in response [:headers "x-request-id"])]
     
-    (case status
-      404 (throw (ex-info "Model not found" 
-                          {:type :model-not-found-error
-                           :provider "ollama"
-                           :model (:model body)}))
-      (throw (ex-info error-msg
-                      {:type :provider-error
-                       :provider "ollama"
-                       :status status
-                       :data body})))))
+    (throw (errors/http-status->error 
+             status 
+             "ollama" 
+             message
+             :request-id request-id
+             :body body))))
 
 ;; ============================================================================
 ;; Model and Cost Configuration
@@ -159,27 +156,30 @@
 
 (defn make-request-impl
   "Ollama-specific make-request implementation"
-  [provider-name transformed-request thread-pools telemetry config]
+  [provider-name transformed-request thread-pool telemetry config]
   (let [model (:model transformed-request)
         is-chat (contains? transformed-request :messages)
         url (str (:api-base config "http://localhost:11434") (if is-chat "/api/chat" "/api/generate"))]
     
-    (cp/future (:api-calls thread-pools)
-      (let [start-time (System/currentTimeMillis)
-            response (http/post url
-                                {:headers {"Content-Type" "application/json"
-                                           "User-Agent" "litellm-clj/1.0.0"}
-                                 :body (json/encode transformed-request)
-                                 :timeout (:timeout config 30000)
-                                 :as :json})
-            duration (- (System/currentTimeMillis) start-time)]
-        
-        ;; Handle errors
-        (when (>= (:status response) 400)
-          (handle-error-response :ollama response))
-        
-        ;; Add request type to response for later processing
-        (assoc response :ollama-request-type (if is-chat :chat :generate))))))
+    (errors/wrap-http-errors
+      "ollama"
+      #(let [start-time (System/currentTimeMillis)
+             response (http/post url
+                                 (conj {:headers {"Content-Type" "application/json"
+                                                  "User-Agent" "litellm-clj/1.0.0"}
+                                        :body (json/encode transformed-request)
+                                        :timeout (:timeout config 30000)
+                                        :as :json}
+                                       (when thread-pool
+                                         {:executor thread-pool})))
+             duration (- (System/currentTimeMillis) start-time)]
+         
+         ;; Handle errors if response has error status
+         (when (>= (:status response) 400)
+           (handle-error-response :ollama response))
+         
+         ;; Add request type to response for later processing
+         (assoc response :ollama-request-type (if is-chat :chat :generate))))))
 
 (defn transform-response-impl
   "Ollama-specific transform-response implementation"
@@ -209,15 +209,16 @@
 
 (defn health-check-impl
   "Ollama-specific health-check implementation"
-  [provider-name thread-pools config]
-  (cp/future (:health-checks thread-pools)
-    (try
-      (let [response (http/get (str (:api-base config "http://localhost:11434") "/api/tags")
-                              {:timeout 5000})]
-        (= 200 (:status response)))
-      (catch Exception e
-        (log/warn "Ollama health check failed" {:error (.getMessage e)})
-        false))))
+  [provider-name thread-pool config]
+  (try
+    (let [response (http/get (str (:api-base config "http://localhost:11434") "/api/tags")
+                            (conj {:timeout 5000}
+                                  (when thread-pool
+                                    {:executor thread-pool})))]
+      (= 200 (:status response)))
+    (catch Exception e
+      (log/warn "Ollama health check failed" {:error (.getMessage e)})
+      false)))
 
 (defn get-cost-per-token-impl
   "Ollama-specific get-cost-per-token implementation"
@@ -290,13 +291,13 @@
 
 (defn test-ollama-connection
   "Test Ollama connection with a simple request"
-  [provider thread-pools telemetry]
+  [provider thread-pool telemetry]
   (let [test-request {:model "llama2"
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
       (let [transformed (transform-request-impl :ollama test-request provider)
-            response-future (make-request-impl :ollama transformed thread-pools telemetry provider)
+            response-future (make-request-impl :ollama transformed thread-pool telemetry provider)
             response @response-future
             standard-response (transform-response-impl :ollama response)]
         {:success true

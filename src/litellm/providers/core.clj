@@ -3,6 +3,7 @@
   (:require [clojure.string :as str]
             [clojure.tools.logging :as log]
             [litellm.schemas :as schemas]
+            [litellm.errors :as errors]
             [litellm.providers.openai :as openai]
             [litellm.providers.anthropic :as anthropic]
             [litellm.providers.gemini :as gemini]
@@ -44,41 +45,44 @@
 
 (defmulti make-request
   "Make HTTP request to provider API, returns a future"
-  (fn [provider-name transformed-request thread-pools telemetry config] provider-name))
+  (fn [provider-name transformed-request thread-pool telemetry config] provider-name))
 
-(defmethod make-request :openai [provider-name transformed-request thread-pools telemetry config]
-  (openai/make-request-impl provider-name transformed-request thread-pools telemetry config))
+(defmethod make-request :openai [provider-name transformed-request thread-pool telemetry config]
+  (openai/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
-(defmethod make-request :anthropic [provider-name transformed-request thread-pools telemetry config]
-  (anthropic/make-request-impl provider-name transformed-request thread-pools telemetry config))
+(defmethod make-request :anthropic [provider-name transformed-request thread-pool telemetry config]
+  (anthropic/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
-(defmethod make-request :gemini [provider-name transformed-request thread-pools telemetry config]
-  (gemini/make-request-impl provider-name transformed-request thread-pools telemetry config))
+(defmethod make-request :gemini [provider-name transformed-request thread-pool telemetry config]
+  (gemini/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
-(defmethod make-request :mistral [provider-name transformed-request thread-pools telemetry config]
-  (mistral/make-request-impl provider-name transformed-request thread-pools telemetry config))
+(defmethod make-request :mistral [provider-name transformed-request thread-pool telemetry config]
+  (mistral/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
-(defmethod make-request :ollama [provider-name transformed-request thread-pools telemetry config]
-  (ollama/make-request-impl provider-name transformed-request thread-pools telemetry config))
+(defmethod make-request :ollama [provider-name transformed-request thread-pool telemetry config]
+  (ollama/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
-(defmethod make-request :openrouter [provider-name transformed-request thread-pools telemetry config]
-  (openrouter/make-request-impl provider-name transformed-request thread-pools telemetry config))
+(defmethod make-request :openrouter [provider-name transformed-request thread-pool telemetry config]
+  (openrouter/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
 ;; make-streaming-request
 ;; ----------------------------------------------------------------------------
 
 (defmulti make-streaming-request
   "Make streaming HTTP request to provider API, returns a core.async channel"
-  (fn [provider-name transformed-request thread-pools config] provider-name))
+  (fn [provider-name transformed-request thread-pool config] provider-name))
 
-(defmethod make-streaming-request :openai [provider-name transformed-request thread-pools config]
-  (openai/make-streaming-request-impl provider-name transformed-request thread-pools config))
+(defmethod make-streaming-request :openai [provider-name transformed-request thread-pool config]
+  (openai/make-streaming-request-impl provider-name transformed-request thread-pool config))
 
-(defmethod make-streaming-request :anthropic [provider-name transformed-request thread-pools config]
-  (anthropic/make-streaming-request-impl provider-name transformed-request thread-pools config))
+(defmethod make-streaming-request :anthropic [provider-name transformed-request thread-pool config]
+  (anthropic/make-streaming-request-impl provider-name transformed-request thread-pool config))
 
-(defmethod make-streaming-request :gemini [provider-name transformed-request thread-pools config]
-  (gemini/make-streaming-request-impl provider-name transformed-request thread-pools config))
+(defmethod make-streaming-request :gemini [provider-name transformed-request thread-pool config]
+  (gemini/make-streaming-request-impl provider-name transformed-request thread-pool config))
+
+(defmethod make-streaming-request :openrouter [provider-name transformed-request thread-pool config]
+  (openrouter/make-streaming-request-impl provider-name transformed-request thread-pool config))
 
 ;; transform-response
 ;; ----------------------------------------------------------------------------
@@ -120,6 +124,9 @@
 
 (defmethod transform-streaming-chunk :gemini [provider-name chunk]
   (gemini/transform-streaming-chunk-impl provider-name chunk))
+
+(defmethod transform-streaming-chunk :openrouter [provider-name chunk]
+  (openrouter/transform-streaming-chunk-impl provider-name chunk))
 
 ;; supports-streaming?
 ;; ----------------------------------------------------------------------------
@@ -209,25 +216,25 @@
 
 (defmulti health-check
   "Perform health check, returns a future with boolean result"
-  (fn [provider-name thread-pools config] provider-name))
+  (fn [provider-name thread-pool config] provider-name))
 
-(defmethod health-check :openai [provider-name thread-pools config]
-  (openai/health-check-impl provider-name thread-pools config))
+(defmethod health-check :openai [provider-name thread-pool config]
+  (openai/health-check-impl provider-name thread-pool config))
 
-(defmethod health-check :anthropic [provider-name thread-pools config]
-  (anthropic/health-check-impl provider-name thread-pools config))
+(defmethod health-check :anthropic [provider-name thread-pool config]
+  (anthropic/health-check-impl provider-name thread-pool config))
 
-(defmethod health-check :gemini [provider-name thread-pools config]
-  (gemini/health-check-impl provider-name thread-pools config))
+(defmethod health-check :gemini [provider-name thread-pool config]
+  (gemini/health-check-impl provider-name thread-pool config))
 
-(defmethod health-check :mistral [provider-name thread-pools config]
-  (mistral/health-check-impl provider-name thread-pools config))
+(defmethod health-check :mistral [provider-name thread-pool config]
+  (mistral/health-check-impl provider-name thread-pool config))
 
-(defmethod health-check :ollama [provider-name thread-pools config]
-  (ollama/health-check-impl provider-name thread-pools config))
+(defmethod health-check :ollama [provider-name thread-pool config]
+  (ollama/health-check-impl provider-name thread-pool config))
 
-(defmethod health-check :openrouter [provider-name thread-pools config]
-  (openrouter/health-check-impl provider-name thread-pools config))
+(defmethod health-check :openrouter [provider-name thread-pool config]
+  (openrouter/health-check-impl provider-name thread-pool config))
 
 ;; get-cost-per-token
 ;; ----------------------------------------------------------------------------
@@ -265,21 +272,23 @@
   "Validate request against provider capabilities"
   [provider-name request]
   (when (and (:stream request) (not (supports-streaming? provider-name)))
-    (throw (ex-info "Provider doesn't support streaming" 
-                    {:provider provider-name
-                     :request request})))
+    (throw (errors/unsupported-feature 
+             (name provider-name) 
+             :streaming
+             :message "Provider doesn't support streaming")))
   
   (when (and (or (:tools request) (:functions request)) 
              (not (supports-function-calling? provider-name)))
-    (throw (ex-info "Provider doesn't support function calling"
-                    {:provider provider-name
-                     :request request})))
+    (throw (errors/unsupported-feature 
+             (name provider-name)
+             :function-calling
+             :message "Provider doesn't support function calling")))
   
   (when-not (schemas/valid-request? request)
-    (throw (ex-info "Invalid request format"
-                    {:provider provider-name
-                     :request request
-                     :errors (schemas/explain-request request)}))))
+    (throw (errors/invalid-request
+             "Invalid request format"
+             :request request
+             :errors (schemas/explain-request request)))))
 
 ;; ============================================================================
 ;; Model String Parsing
@@ -379,48 +388,49 @@
    :total-tokens (+ (or prompt-tokens 0) (or completion-tokens 0))})
 
 ;; ============================================================================
-;; Error Handling
+;; Error Handling (Legacy - kept for backward compatibility)
 ;; ============================================================================
 
+;; These functions are now thin wrappers around the new errors namespace
+;; and are kept for backward compatibility. New code should use litellm.errors directly.
+
 (defn provider-error
-  "Create a provider-specific error"
+  "Create a provider-specific error (DEPRECATED - use litellm.errors/provider-error)"
   [provider message & {:keys [status code data]}]
-  (ex-info message
-           (cond-> {:provider (if (keyword? provider) (name provider) (str provider))
-                    :type :provider-error}
-             status (assoc :status status)
-             code (assoc :code code)
-             data (assoc :data data))))
+  (errors/provider-error
+    (if (keyword? provider) (name provider) (str provider))
+    message
+    :http-status status
+    :provider-code code))
 
 (defn rate-limit-error
-  "Create a rate limit error"
+  "Create a rate limit error (DEPRECATED - use litellm.errors/rate-limit)"
   [provider & {:keys [retry-after]}]
-  (provider-error provider "Rate limit exceeded"
-                  :status 429
-                  :code :rate-limit
-                  :data {:retry-after retry-after}))
+  (errors/rate-limit
+    (if (keyword? provider) (name provider) (str provider))
+    "Rate limit exceeded"
+    :retry-after retry-after))
 
 (defn authentication-error
-  "Create an authentication error"
+  "Create an authentication error (DEPRECATED - use litellm.errors/authentication-error)"
   [provider]
-  (provider-error provider "Authentication failed"
-                  :status 401
-                  :code :authentication))
+  (errors/authentication-error
+    (if (keyword? provider) (name provider) (str provider))
+    "Authentication failed"))
 
 (defn model-not-found-error
-  "Create a model not found error"
+  "Create a model not found error (DEPRECATED - use litellm.errors/model-not-found)"
   [provider model]
-  (provider-error provider (str "Model not found: " model)
-                  :status 404
-                  :code :model-not-found
-                  :data {:model model}))
+  (errors/model-not-found
+    (if (keyword? provider) (name provider) (str provider))
+    model))
 
 (defn quota-exceeded-error
-  "Create a quota exceeded error"
+  "Create a quota exceeded error (DEPRECATED - use litellm.errors/quota-exceeded)"
   [provider]
-  (provider-error provider "Quota exceeded"
-                  :status 429
-                  :code :quota-exceeded))
+  (errors/quota-exceeded
+    (if (keyword? provider) (name provider) (str provider))
+    "Quota exceeded"))
 
 ;; ============================================================================
 ;; Provider Discovery
@@ -457,9 +467,10 @@
   "Validate provider configuration"
   [config]
   (when-not (schemas/valid-config? config)
-    (throw (ex-info "Invalid provider configuration"
-                    {:config config
-                     :errors (schemas/explain-config config)})))
+    (throw (errors/invalid-config
+             "Invalid provider configuration"
+             :config config
+             :errors (schemas/explain-config config))))
   config)
 
 ;; ============================================================================
@@ -523,14 +534,14 @@
 
 (defn test-provider
   "Test provider with a simple request"
-  [provider-name thread-pools telemetry config]
+  [provider-name thread-pool telemetry config]
   (let [test-request {:model "test"
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 1}]
     (try
       (validate-request provider-name test-request)
       (let [transformed (transform-request provider-name test-request config)
-            response-future (make-request provider-name transformed thread-pools telemetry config)
+            response-future (make-request provider-name transformed thread-pool telemetry config)
             response @response-future
             standard-response (transform-response provider-name response)]
         {:success true

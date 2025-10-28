@@ -32,23 +32,9 @@ LiteLLM Clojure provides a unified, idiomatic Clojure interface for interacting 
 
 **Key Benefits:**
 - Switch between providers without changing your code
-- Built-in async support with proper context propagation
-- Comprehensive observability and metrics
-- Thread pool management for optimal performance
-- Cost tracking and token estimation
-
----
-
-## Features
-
-- **Unified API**: Single interface for multiple LLM providers
-- **Async Operations**: Non-blocking API calls with proper context propagation
-- **Provider Abstraction**: Easy to add new LLM providers
-- **Health Monitoring**: System health checks and metrics
-- **Cost Tracking**: Built-in token counting and cost estimation
-- **Streaming Support**: Stream responses for better UX
-- **Function Calling**: Support for OpenAI-style function calling
-
+- Streaming support with core.async channels
+- Router API to switch between models in runtime
+- Function calling support (Alpha)
 ---
 
 ## Model Provider Support
@@ -97,67 +83,46 @@ Add to your `project.clj`:
 
 ## Quick Start
 
-### Option 1: Direct API (litellm.core)
+### Option 1 : Router API (litellm.router) - Recommended
+
+For configuration-based workflows with named configs:
 
 ```clojure
-(require '[litellm.core :as llm])
+(require '[litellm.router :as router])
 
-;; Make a completion request
-(def response (llm/completion :openai "gpt-4o-mini"
-                {:messages [{:role :user :content "Hello, how are you?"}]}
-                {:api-key (System/getenv "OPENAI_API_KEY")}))
+;; Quick setup from environment variables
+(router/quick-setup!)
 
-;; Access the response
-(println (llm/extract-content response))
-```
+;; Or register custom configurations
+(router/register! :fast 
+  {:provider :openai 
+   :model "gpt-4o-mini" 
+   :config {:api-key (System/getenv "OPENAI_API_KEY")}})
 
-### Option 2: System-based API (litellm.system)
-
-```clojure
-(require '[litellm.system :as system])
-
-;; Create a system with configuration
-(def sys (system/create-system
-          {:providers {:openai {:api-key (System/getenv "OPENAI_API_KEY")}}
-           :thread-pools {:api-calls {:pool-size 10}}}))
-
-;; Make a completion request
-(def response (system/completion sys :openai "gpt-4o-mini"
+;; Use registered configs
+(def response (router/completion :fast 
                 {:messages [{:role :user :content "Hello, how are you?"}]}))
 
 ;; Access the response
-(println (-> response :choices first :message :content))
-
-;; Shutdown the system when done
-(system/shutdown-system! sys)
+(println (router/extract-content response))
 ```
 
----
+### Option 2: Direct API (litellm.core)
 
-## Usage Examples
-
-### Basic Completion
+For simple, direct provider calls:
 
 ```clojure
-(require '[litellm.core :as llm])
+```clojure
+(require '[litellm.core :as core])
 
-;; Simple completion with OpenAI
-(def response (llm/completion :openai "gpt-4o-mini"
-                {:messages [{:role :user :content "Explain quantum computing"}]
-                 :max-tokens 100}
-                {:api-key (System/getenv "OPENAI_API_KEY")}))
-
-;; Extract the content
-(println (llm/extract-content response))
-
-;; Or use provider-specific convenience functions
-(def response2 (llm/openai-completion "gpt-4o-mini"
-                 {:messages [{:role :user :content "What is Clojure?"}]}
-                 :api-key (System/getenv "OPENAI_API_KEY")))
+;; Direct provider calls without registration
+(let [response (core/completion :openai "gpt-4o-mini"
+                                {:messages [{:role :user :content "Hello"}]
+                                 :api-key (System/getenv "OPENAI_API_KEY")})]
+  (println (core/extract-content response)))
 ```
 
 ### Streaming Responses
-
 ```clojure
 (require '[litellm.core :as llm]
          '[litellm.streaming :as streaming]
@@ -195,29 +160,29 @@ Add to your `project.clj`:
 
 (def response (llm/completion :openai "gpt-4"
                 {:messages [{:role :user :content "What's the weather in Boston?"}]
-                 :functions [{:name "get_weather"
-                             :description "Get the current weather"
-                             :parameters {:type "object"
-                                         :properties {:location {:type "string"
-                                                                :description "City name"}}
-                                         :required ["location"]}}]}
+                 :tools [{:type "function"
+                         :function {:name "get_weather"
+                                   :description "Get the current weather"
+                                   :parameters {:type "object"
+                                               :properties {:location {:type "string"
+                                                                      :description "City name"}}
+                                               :required ["location"]}}}]}
                 {:api-key (System/getenv "OPENAI_API_KEY")}))
 
 ;; Check for function call
 (let [message (llm/extract-message response)]
-  (when-let [function-call (:function-call message)]
-    (println "Function to call:" (:name function-call))
-    (println "Arguments:" (:arguments function-call))))
+  (when-let [tool-calls (:tool-calls message)]
+    (doseq [tool-call tool-calls]
+       (println "Tool to call:" (get-in tool-call [:function :name]))
+       (println "Arguments:" (get-in tool-call [:function :arguments])))))
 ```
 
 ---
 
 ## Documentation
-
 - **[API Guide](docs/API_GUIDE.md)** - Comprehensive API reference
+- **[Error Handling](docs/ERROR_HANDLING.md)** - Examples related to error handling
 - **[Streaming Guide](docs/STREAMING_GUIDE.md)** - Detailed streaming documentation
-- **[Migration Guide](docs/MIGRATION_GUIDE.md)** - Migrating from other libraries
-- **[Namespaces](docs/NAMESPACES.md)** - Namespace organization and structure
 - **[Examples](examples/)** - More code examples
 
 ---

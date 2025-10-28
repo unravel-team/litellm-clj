@@ -1,12 +1,12 @@
 (ns litellm.providers.anthropic
   "Anthropic provider implementation for LiteLLM"
   (:require [litellm.streaming :as streaming]
+            [litellm.errors :as errors]
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
             [clojure.string :as str]
-            [clojure.core.async :as async]
-            [com.climate.claypoole :as cp]))
+            [clojure.core.async :as async]))
 
 ;; ============================================================================
 ;; Message Transformations
@@ -22,13 +22,56 @@
     
     {:system (when system-message (:content system-message))
      :messages (map (fn [msg]
-                      {:role (case (:role msg)
-                               :user "user"
-                               :assistant "assistant"
-                               :tool "assistant" ;; Anthropic doesn't have tool role, map to assistant
-                               (name (:role msg)))
-                       :content (:content msg)})
+                      (let [base {:role (case (:role msg)
+                                          :user "user"
+                                          :assistant "assistant"
+                                          :tool "user" ;; Tool results are sent as user messages
+                                          (name (:role msg)))}]
+                        (cond
+                          ;; Tool result message
+                          (= :tool (:role msg))
+                          (assoc base :content [{:type "tool_result"
+                                                :tool_use_id (:tool-call-id msg)
+                                                :content (:content msg)}])
+                          
+                          ;; Assistant message with tool calls
+                          (and (= :assistant (:role msg)) (:tool-calls msg))
+                          (assoc base :content 
+                                 (vec (concat
+                                       (when (:content msg)
+                                         [{:type "text" :text (:content msg)}])
+                                       (map (fn [tool-call]
+                                              {:type "tool_use"
+                                               :id (:id tool-call)
+                                               :name (get-in tool-call [:function :name])
+                                               :input (json/decode (get-in tool-call [:function :arguments]) true)})
+                                            (:tool-calls msg)))))
+                          
+                          ;; Regular text message
+                          :else
+                          (assoc base :content (:content msg)))))
                     other-messages)}))
+
+(defn transform-tools
+  "Transform tools to Anthropic format"
+  [tools]
+  (when tools
+    (map (fn [tool]
+           (let [func (:function tool)]
+             {:name (or (:function-name func) (:name func))
+              :description (or (:function-description func) (:description func))
+              :input_schema (or (:function-parameters func) (:parameters func))}))
+         tools)))
+
+(defn transform-tool-choice
+  "Transform tool choice to Anthropic format"
+  [tool-choice]
+  (cond
+    (= tool-choice :auto) {:type "auto"}
+    (= tool-choice :any) {:type "any"}
+    (= tool-choice :none) {:type "none"}
+    (map? tool-choice) {:type "tool" :name (:name tool-choice)}
+    :else {:type "auto"}))
 
 ;; ============================================================================
 ;; Response Transformations
@@ -40,13 +83,28 @@
   {:role (keyword (:role message))
    :content (:content message)})
 
+(defn transform-tool-calls
+  "Transform Anthropic tool uses to standard format"
+  [content]
+  (when-let [tool-uses (seq (filter #(= "tool_use" (:type %)) content))]
+    (vec (map (fn [tool-use]
+                {:id (:id tool-use)
+                 :type "function"
+                 :function {:name (:name tool-use)
+                           :arguments (json/encode (:input tool-use))}})
+              tool-uses))))
+
 (defn transform-choice
   "Transform Anthropic response to standard choice format"
   [response index]
-  {:index index
-   :message {:role :assistant
-             :content (get-in response [:content 0 :text])}
-   :finish-reason (keyword (:stop_reason response))})
+  (let [content (:content response)
+        text-content (some #(when (= "text" (:type %)) (:text %)) content)
+        tool-calls (transform-tool-calls content)]
+    {:index index
+     :message {:role :assistant
+               :content text-content
+               :tool-calls tool-calls}
+     :finish-reason (keyword (:stop_reason response))}))
 
 (defn transform-usage
   "Transform Anthropic usage to standard format"
@@ -66,26 +124,18 @@
   [provider response]
   (let [status (:status response)
         body (:body response)
-        error-info (get body :error {})]
+        error-info (get body :error {})
+        message (or (:message error-info) "Unknown error")
+        provider-code (:type error-info)
+        request-id (get-in response [:headers "x-request-id"])]
     
-    (case status
-      401 (throw (ex-info "Authentication failed" 
-                          {:type :authentication-error
-                           :provider "anthropic"}))
-      429 (throw (ex-info "Rate limit exceeded" 
-                          {:type :rate-limit-error
-                           :provider "anthropic"
-                           :retry-after (get-in response [:headers "retry-after"])}))
-      404 (throw (ex-info "Model not found" 
-                          {:type :model-not-found-error
-                           :provider "anthropic"
-                           :model (:model body)}))
-      (throw (ex-info (or (:message error-info) "Unknown error")
-                      {:type :provider-error
-                       :provider "anthropic"
-                       :status status
-                       :code (:type error-info)
-                       :data error-info})))))
+    (throw (errors/http-status->error 
+             status 
+             "anthropic" 
+             message
+             :provider-code provider-code
+             :request-id request-id
+             :body body))))
 
 ;; ============================================================================
 ;; Model and Cost Configuration
@@ -129,37 +179,48 @@
   (let [model (extract-model-name (:model request))
         mapped-model (get (:model-mapping config default-model-mapping) model model)
         messages-data (transform-messages (:messages request))
+        ;; Anthropic doesn't allow both temperature and top_p - prefer temperature if both are specified
+        has-temperature? (contains? request :temperature)
+        has-top-p? (contains? request :top-p)
         transformed {:model mapped-model
                      :max_tokens (:max-tokens request 1024)
-                     :temperature (:temperature request 0.7)
-                     :top_p (:top-p request 1.0)
                      :stream (:stream request false)}]
     
-    ;; Add system prompt if present
+    ;; Add system prompt, messages, tools if present
+    ;; Only add one of temperature or top_p (Anthropic constraint)
     (cond-> transformed
+      has-temperature? (assoc :temperature (:temperature request))
+      (and has-top-p? (not has-temperature?)) (assoc :top_p (:top-p request))
+      (and (not has-temperature?) (not has-top-p?)) (assoc :temperature 1.0)
       (:system messages-data) (assoc :system (:system messages-data))
-      (:messages messages-data) (assoc :messages (:messages messages-data)))))
+      (:messages messages-data) (assoc :messages (:messages messages-data))
+      (:tools request) (assoc :tools (transform-tools (:tools request)))
+      (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request))))))
 
 (defn make-request-impl
   "Anthropic-specific make-request implementation"
-  [provider-name transformed-request thread-pools telemetry config]
+  [provider-name transformed-request thread-pool telemetry config]
   (let [url (str (:api-base config "https://api.anthropic.com") "/v1/messages")]
-    (cp/future (:api-calls thread-pools)
-      (let [start-time (System/currentTimeMillis)
+    (errors/wrap-http-errors
+     "anthropic"
+     #(let [start-time (System/currentTimeMillis)
             response (http/post url
-                                {:headers {"x-api-key" (:api-key config)
-                                           "anthropic-version" "2023-06-01"
-                                           "Content-Type" "application/json"
-                                           "User-Agent" "litellm-clj/1.0.0"}
-                                 :body (json/encode transformed-request)
-                                 :timeout (:timeout config 30000)
-                                 :as :json})
+                                (conj {:headers {"x-api-key" (:api-key config)
+                                                 "anthropic-version" "2023-06-01"
+                                                 "Content-Type" "application/json"
+                                                 "User-Agent" "litellm-clj/1.0.0"}
+                                       :body (json/encode transformed-request)
+                                       :timeout (:timeout config 30000)
+                                       :async? true                                       
+                                       :as :json}
+                                      (when thread-pool
+                                        {:executor thread-pool})))
             duration (- (System/currentTimeMillis) start-time)]
         
-        ;; Handle errors
-        (when (>= (:status response) 400)
-          (handle-error-response :anthropic response))
-        
+        ;; Handle errors if response has error status
+        (when (>= (:status @response) 400)
+          (handle-error-response :anthropic @response))
+
         response))))
 
 (defn transform-response-impl
@@ -181,7 +242,7 @@
 (defn supports-function-calling-impl
   "Anthropic-specific supports-function-calling? implementation"
   [provider-name]
-  false)
+  true)
 
 (defn get-rate-limits-impl
   "Anthropic-specific get-rate-limits implementation"
@@ -191,17 +252,18 @@
 
 (defn health-check-impl
   "Anthropic-specific health-check implementation"
-  [provider-name thread-pools config]
-  (cp/future (:health-checks thread-pools)
-    (try
-      (let [response (http/get (str (:api-base config "https://api.anthropic.com") "/v1/models")
-                              {:headers {"x-api-key" (:api-key config)
-                                         "anthropic-version" "2023-06-01"}
-                               :timeout 5000})]
-        (= 200 (:status response)))
-      (catch Exception e
-        (log/warn "Anthropic health check failed" {:error (.getMessage e)})
-        false))))
+  [provider-name thread-pool config]
+  (try
+    (let [response (http/get (str (:api-base config "https://api.anthropic.com") "/v1/models")
+                            (conj {:headers {"x-api-key" (:api-key config)
+                                             "anthropic-version" "2023-06-01"}
+                                   :timeout 5000}
+                                  (when thread-pool
+                                    {:executor thread-pool})))]
+      (= 200 (:status response)))
+    (catch Exception e
+      (log/warn "Anthropic health check failed" {:error (.getMessage e)})
+      false)))
 
 (defn get-cost-per-token-impl
   "Anthropic-specific get-cost-per-token implementation"
@@ -217,26 +279,56 @@
   [provider-name chunk]
   (let [event-type (:type chunk)]
     (case event-type
-      "content_block_delta" {:id (:message_id chunk)
-                             :object "chat.completion.chunk"
-                             :created (quot (System/currentTimeMillis) 1000)
-                             :model (:model chunk)
-                             :choices [{:index 0
-                                       :delta {:role :assistant
-                                              :content (get-in chunk [:delta :text])}
-                                       :finish-reason nil}]}
+      "content_block_start" (when (= "tool_use" (get-in chunk [:content_block :type]))
+                              {:id (:message_id chunk)
+                               :object "chat.completion.chunk"
+                               :created (quot (System/currentTimeMillis) 1000)
+                               :model (:model chunk)
+                               :choices [{:index 0
+                                         :delta {:role :assistant
+                                                :tool-calls [{:id (get-in chunk [:content_block :id])
+                                                             :type "function"
+                                                             :function {:name (get-in chunk [:content_block :name])
+                                                                       :arguments ""}}]}
+                                         :finish-reason nil}]})
+      "content_block_delta" (cond
+                              ;; Text delta
+                              (get-in chunk [:delta :text])
+                              {:id (:message_id chunk)
+                               :object "chat.completion.chunk"
+                               :created (quot (System/currentTimeMillis) 1000)
+                               :model (:model chunk)
+                               :choices [{:index 0
+                                         :delta {:role :assistant
+                                                :content (get-in chunk [:delta :text])}
+                                         :finish-reason nil}]}
+                              
+                              ;; Tool input delta
+                              (get-in chunk [:delta :partial_json])
+                              {:id (:message_id chunk)
+                               :object "chat.completion.chunk"
+                               :created (quot (System/currentTimeMillis) 1000)
+                               :model (:model chunk)
+                               :choices [{:index 0
+                                         :delta {:tool-calls [{:function {:arguments (get-in chunk [:delta :partial_json])}}]}
+                                         :finish-reason nil}]}
+                              
+                              :else nil)
       "message_stop" {:id (:message_id chunk)
                      :object "chat.completion.chunk"
                      :created (quot (System/currentTimeMillis) 1000)
                      :model (:model chunk)
                      :choices [{:index 0
                                :delta {}
-                               :finish-reason :stop}]}
+                               :finish-reason (case (:stop_reason chunk)
+                                               "end_turn" :stop
+                                               "tool_use" :tool_calls
+                                               :stop)}]}
       nil)))
 
 (defn make-streaming-request-impl
   "Anthropic-specific make-streaming-request implementation"
-  [provider-name transformed-request thread-pools config]
+  [provider-name transformed-request thread-pool config]
   (let [url (str (:api-base config "https://api.anthropic.com") "/v1/messages")
         output-ch (streaming/create-stream-channel)]
     ;; Use thread instead of go for blocking I/O
@@ -352,13 +444,13 @@
 
 (defn test-anthropic-connection
   "Test Anthropic connection with a simple request"
-  [provider thread-pools telemetry]
+  [provider thread-pool telemetry]
   (let [test-request {:model "claude-3-haiku"
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
       (let [transformed (transform-request-impl :anthropic test-request provider)
-            response-future (make-request-impl :anthropic transformed thread-pools telemetry provider)
+            response-future (make-request-impl :anthropic transformed thread-pool telemetry provider)
             response @response-future
             standard-response (transform-response-impl :anthropic response)]
         {:success true

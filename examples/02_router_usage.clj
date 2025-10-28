@@ -1,39 +1,39 @@
-(ns examples.registry-usage
-  "Example usage of litellm.registry - configuration-based API"
-  (:require [litellm.registry :as registry]))
+(ns examples.router-usage
+  "Example usage of litellm.router - configuration-based API"
+  (:require [litellm.router :as router]))
 
 ;; ============================================================================
-;; litellm.registry - Configuration-based API with named configs
+;; litellm.router - Configuration-based API with named configs
 ;; ============================================================================
 
-;; Registry allows you to:
+;; Router allows you to:
 ;; - Register named configurations
 ;; - Use routing functions to dynamically select providers
 ;; - Quick setup with environment variables
 
-(defn basic-registry-example []
-  (println "\n=== Basic Registry Example ===")
+(defn basic-router-example []
+  (println "\n=== Basic Router Example ===")
   
   ;; Register a simple configuration
-  (registry/register! :fast
+  (router/register! :fast
                      {:provider :openai
                       :model "gpt-4o-mini"
                       :config {:api-key (System/getenv "OPENAI_API_KEY")}})
   
   ;; Use the registered config
-  (let [response (registry/completion :fast 
+  (let [response (router/completion :fast 
                                      {:messages [{:role :user :content "What is 2+2?"}]
                                       :max-tokens 50})]
-    (println "Response:" (registry/extract-content response)))
+    (println "Response:" (router/extract-content response)))
   
   ;; List registered configs
-  (println "Registered configs:" (registry/list-configs)))
+  (println "Registered configs:" (router/list-configs)))
 
-(defn router-example []
-  (println "\n=== Router Example ===")
+(defn dynamic-routing-example []
+  (println "\n=== Dynamic Routing Example ===")
   
   ;; Register a configuration with dynamic routing
-  (registry/register! :smart
+  (router/register! :smart
                      {:router (fn [request]
                                ;; Route based on message count
                                (if (> (count (:messages request)) 5)
@@ -43,14 +43,14 @@
                                :anthropic {:api-key (System/getenv "ANTHROPIC_API_KEY")}}})
   
   ;; Short conversation - will use OpenAI
-  (let [response (registry/completion :smart
+  (let [response (router/completion :smart
                                      {:messages [{:role :user :content "Hi!"}]
                                       :max-tokens 50})]
-    (println "Short conversation (OpenAI):" (registry/extract-content response)))
+    (println "Short conversation (OpenAI):" (router/extract-content response)))
   
   ;; Long conversation - will use Anthropic (if available)
   (when (System/getenv "ANTHROPIC_API_KEY")
-    (let [response (registry/completion :smart
+    (let [response (router/completion :smart
                                        {:messages [{:role :user :content "1"}
                                                   {:role :assistant :content "a"}
                                                   {:role :user :content "2"}
@@ -59,48 +59,48 @@
                                                   {:role :assistant :content "c"}
                                                   {:role :user :content "Tell me about routing"}]
                                         :max-tokens 100})]
-      (println "Long conversation (Anthropic):" (registry/extract-content response)))))
+      (println "Long conversation (Anthropic):" (router/extract-content response)))))
 
 (defn quick-setup-example []
   (println "\n=== Quick Setup Example ===")
   
   ;; Clear any existing configs
-  (registry/clear-registry!)
+  (router/clear-router!)
   
   ;; Quick setup automatically registers configs for available providers
-  (registry/quick-setup!)
+  (router/quick-setup!)
   
-  (println "Auto-configured providers:" (registry/list-configs))
+  (println "Auto-configured providers:" (router/list-configs))
   
   ;; Now you can use the auto-configured providers
   (when (System/getenv "OPENAI_API_KEY")
-    (let [response (registry/completion :openai
+    (let [response (router/completion :openai
                                        {:messages [{:role :user :content "Hello!"}]
                                         :max-tokens 30})]
-      (println "OpenAI response:" (registry/extract-content response)))))
+      (println "OpenAI response:" (router/extract-content response)))))
 
 (defn manual-setup-example []
   (println "\n=== Manual Setup Example ===")
   
   ;; Set up individual providers with custom names
-  (registry/setup-openai! :config-name :my-fast-model
+  (router/setup-openai! :config-name :my-fast-model
                          :model "gpt-4o-mini")
   
-  (registry/setup-openai! :config-name :my-smart-model
+  (router/setup-openai! :config-name :my-smart-model
                          :model "gpt-4")
   
-  (println "Configured models:" (registry/list-configs))
+  (println "Configured models:" (router/list-configs))
   
   ;; Use the custom configs
   (when (System/getenv "OPENAI_API_KEY")
-    (let [response (registry/chat :my-fast-model "What is the weather like?")]
-      (println "Fast model response:" (registry/extract-content response)))))
+    (let [response (router/chat :my-fast-model "What is the weather like?")]
+      (println "Fast model response:" (router/extract-content response)))))
 
 (defn custom-router-example []
   (println "\n=== Custom Router Example ===")
   
   ;; Create a router based on priority
-  (let [router-config (registry/create-router
+  (let [router-config (router/create-router
                        (fn [{:keys [priority]}]
                          (case priority
                            :high {:provider :anthropic :model "claude-3-opus-20240229"}
@@ -109,36 +109,36 @@
                        {:openai {:api-key (System/getenv "OPENAI_API_KEY")}
                         :anthropic {:api-key (System/getenv "ANTHROPIC_API_KEY")}})]
     
-    (registry/register! :priority-router router-config)
+    (router/register! :priority-router router-config)
     
     ;; High priority request (uses Anthropic)
     (when (System/getenv "ANTHROPIC_API_KEY")
-      (let [response (registry/completion :priority-router
+      (let [response (router/completion :priority-router
                                          {:messages [{:role :user :content "Important question"}]
                                           :max-tokens 50
                                           :priority :high})]
-        (println "High priority response (Anthropic):" (registry/extract-content response))))
+        (println "High priority response (Anthropic):" (router/extract-content response))))
     
     ;; Low priority request (uses OpenAI mini)
     (when (System/getenv "OPENAI_API_KEY")
-      (let [response (registry/completion :priority-router
+      (let [response (router/completion :priority-router
                                          {:messages [{:role :user :content "Simple question"}]
                                           :max-tokens 50
                                           :priority :low})]
-        (println "Low priority response (OpenAI mini):" (registry/extract-content response))))))
+        (println "Low priority response (OpenAI mini):" (router/extract-content response))))))
 
 (defn -main []
-  (println "litellm.registry Examples")
+  (println "litellm.router Examples")
   (println "=========================")
   
   (when (System/getenv "OPENAI_API_KEY")
-    (basic-registry-example)
+    (basic-router-example)
     (quick-setup-example)
     (manual-setup-example))
   
   (when (and (System/getenv "OPENAI_API_KEY")
             (System/getenv "ANTHROPIC_API_KEY"))
-    (router-example)
+    (dynamic-routing-example)
     (custom-router-example)))
 
 (comment
@@ -146,8 +146,8 @@
   (-main)
   
   ;; Individual examples
-  (basic-registry-example)
-  (router-example)
+  (basic-router-example)
+  (dynamic-routing-example)
   (quick-setup-example)
   (manual-setup-example)
   (custom-router-example))

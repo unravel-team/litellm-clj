@@ -1,11 +1,15 @@
 (ns litellm.core
   "Core API for LiteLLM - Direct provider calls with model names as-is"
   (:require [clojure.tools.logging :as log]
+            [litellm.errors :as errors]
             [litellm.providers.core :as providers]
             [litellm.providers.openai]    ; Load to register provider
             [litellm.providers.anthropic] ; Load to register provider
+            [litellm.providers.gemini]    ; Load to register provider
+            [litellm.providers.mistral]   ; Load to register provider
+            [litellm.providers.ollama]    ; Load to register provider
             [litellm.providers.openrouter] ; Load to register provider
-            [litellm.threadpool :as threadpool]))
+            ))
 
 ;; ============================================================================
 ;; Provider Discovery
@@ -26,44 +30,57 @@
   [provider-name]
   (providers/provider-status provider-name))
 
-(def ^:private minimal-thread-pools
-  "Minimal thread pools for streaming support in core"
-  (delay (threadpool/create-thread-pools {:api-calls {:pool-size 5}})))
 
 ;; ============================================================================
 ;; Core Completion API
 ;; ============================================================================
 
 (defn completion
-  "Direct completion function - accepts provider keyword and model name as-is.
+  "Direct completion function - accepts `provider` keyword and `model` name as-is.
   
   Supports both streaming and non-streaming requests.
-  For streaming requests, returns a core.async channel.
+  For streaming requests, returns a `core.async` channel.
   
-  Examples:
-    ;; Non-streaming
-    (completion :openai \"gpt-4\" 
-                {:messages [{:role :user :content \"Hello\"}]
-                 :api-key \"sk-...\"})
-    
-    ;; Streaming
-    (completion :openai \"gpt-4\"
-                {:messages [{:role :user :content \"Hello\"}]
-                 :stream true
-                 :api-key \"sk-...\"})
-    
-    (completion :anthropic \"claude-3-sonnet-20240229\"
-                {:messages [{:role :user :content \"Hello\"}]
-                 :api-key \"sk-ant-...\"})"
+  **Parameters:**
+  - `provider` - Provider keyword (`:openai`, `:anthropic`, `:gemini`, `:mistral`, `:ollama`, `:openrouter`)
+  - `model` - Model name string (e.g., `\"gpt-4\"`, `\"claude-3-opus-20240229\"`)
+  - `request-map` - Request with `:messages`, `:temperature`, `:max-tokens`, etc.
+  - `config` - Optional config with `:api-key`, `:api-base`, `:timeout`
+  
+  **Returns:**
+  - Non-streaming: Response map with `:choices`, `:usage`, etc.
+  - Streaming: `core.async` channel with response chunks
+  
+  **Examples:**
+  
+  ```clojure
+  ;; Non-streaming completion
+  (completion :openai \"gpt-4\" 
+              {:messages [{:role :user :content \"Hello\"}]}
+              {:api-key \"sk-...\"})
+  
+  ;; Streaming completion (returns channel)
+  (completion :openai \"gpt-4\"
+              {:messages [{:role :user :content \"Hello\"}]
+               :stream true}
+              {:api-key \"sk-...\"})
+  
+  ;; Anthropic Claude
+  (completion :anthropic \"claude-3-sonnet-20240229\"
+              {:messages [{:role :user :content \"Hello\"}]}
+              {:api-key \"sk-ant-...\"})
+  ```
+  
+  **See also:** [[chat]], [[extract-content]], [[extract-message]]"
   ([provider-name model request-map]
    (completion provider-name model request-map {}))
   
   ([provider-name model request-map config]
    ;; Validate provider exists
    (when-not (provider-available? provider-name)
-     (throw (ex-info "Provider not available"
-                    {:provider provider-name
-                     :available-providers (list-providers)})))
+     (throw (errors/provider-not-found 
+              (name provider-name)
+              :available-providers (list-providers))))
    
    ;; Build full request with model
    (let [request (assoc request-map :model model)]
@@ -77,24 +94,42 @@
        (let [;; Merge API key and other request params into config
              merged-config (merge config (select-keys request [:api-key :api-base :timeout]))
              transformed-request (providers/transform-request provider-name request merged-config)]
-         (providers/make-streaming-request provider-name transformed-request @minimal-thread-pools merged-config))
+         (providers/make-streaming-request provider-name transformed-request nil merged-config))
        
        ;; Non-streaming request - use the provider's make-request
        (let [;; Merge API key and other request params into config
              merged-config (merge config (select-keys request [:api-key :api-base :timeout]))
              transformed-request (providers/transform-request provider-name request merged-config)
-             response-future (providers/make-request provider-name transformed-request @minimal-thread-pools nil merged-config)
+             response-future (providers/make-request provider-name transformed-request nil nil merged-config)
              response @response-future]  ; Block and wait for response
-         
          ;; Transform response
          (providers/transform-response provider-name response))))))
 
 (defn chat
-  "Simple chat completion function.
+  "Simple chat completion function for single user messages.
   
-  Example:
-    (chat :openai \"gpt-4\" \"What is 2+2?\" 
-          {:api-key \"sk-...\" :system-prompt \"You are a math tutor\"})"
+  Convenience wrapper around [[completion]] for simple question-answer interactions.
+  
+  **Parameters:**
+  - `provider-name` - Provider keyword (`:openai`, `:anthropic`, etc.)
+  - `model` - Model name string
+  - `message` - User message string
+  - `config` - Optional keyword args including `:system-prompt`, `:api-key`, etc.
+  
+  **Examples:**
+  
+  ```clojure
+  ;; Simple question
+  (chat :openai \"gpt-4\" \"What is 2+2?\" 
+        :api-key \"sk-...\")
+  
+  ;; With system prompt
+  (chat :openai \"gpt-4\" \"Explain quantum physics\"
+        :api-key \"sk-...\"
+        :system-prompt \"You are a physics professor\")
+  ```
+  
+  **See also:** [[completion]], [[extract-content]]"
   [provider-name model message & {:keys [system-prompt] :as config}]
   (let [messages (if system-prompt
                    [{:role :system :content system-prompt}
@@ -180,17 +215,53 @@
 ;; ============================================================================
 
 (defn extract-content
-  "Extract content from completion response"
+  "Extract text content from a completion response.
+  
+  Retrieves the generated text from the first choice in the response.
+  
+  **Example:**
+  
+  ```clojure
+  (def response (completion :openai \"gpt-4\" {...}))
+  (extract-content response)
+  ;; => \"The generated text content...\"
+  ```
+  
+  **See also:** [[extract-message]], [[extract-usage]]"
   [response]
   (-> response :choices first :message :content))
 
 (defn extract-message
-  "Extract message from completion response"
+  "Extract the full message object from a completion response.
+  
+  Returns the complete message including `:content`, `:role`, and `:tool-calls` (if any).
+  
+  **Example:**
+  
+  ```clojure
+  (def response (completion :openai \"gpt-4\" {...}))
+  (extract-message response)
+  ;; => {:role :assistant :content \"...\" :tool-calls [...]}
+  ```
+  
+  **See also:** [[extract-content]], [[extract-usage]]"
   [response]
   (-> response :choices first :message))
 
 (defn extract-usage
-  "Extract usage information from response"
+  "Extract token usage information from a completion response.
+  
+  Returns a map with `:prompt-tokens`, `:completion-tokens`, and `:total-tokens`.
+  
+  **Example:**
+  
+  ```clojure
+  (def response (completion :openai \"gpt-4\" {...}))
+  (extract-usage response)
+  ;; => {:prompt-tokens 10 :completion-tokens 20 :total-tokens 30}
+  ```
+  
+  **See also:** [[extract-content]], [[calculate-cost]]"
   [response]
   (:usage response))
 
@@ -204,13 +275,19 @@
   (try
     (f)
     (catch clojure.lang.ExceptionInfo e
-      (let [data (ex-data e)]
-        (case (:type data)
-          :provider-error (log/error "Provider error" data)
-          :rate-limit (log/warn "Rate limit exceeded" data)
-          :authentication (log/error "Authentication failed" data)
-          (log/error "Unknown error" data))
-        (throw e)))
+      (if (errors/litellm-error? e)
+        (let [category (errors/get-error-category e)]
+          (case category
+            :provider-error (log/warn "Provider error" (errors/error-summary e))
+            :client-error (log/error "Client error" (errors/error-summary e))
+            :response-error (log/error "Response error" (errors/error-summary e))
+            :system-error (log/error "System error" (errors/error-summary e))
+            (log/error "Unknown error category" (errors/error-summary e)))
+          (throw e))
+        ;; Non-litellm error
+        (do
+          (log/error "Unexpected error" e)
+          (throw e))))
     (catch Exception e
       (log/error "Unexpected error" e)
       (throw e))))

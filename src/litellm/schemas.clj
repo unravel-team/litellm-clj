@@ -14,7 +14,7 @@
 (def Message
   [:map
    [:role Role]
-   [:content :string]
+   [:content {:optional true} :string]  ; Allow nil for assistant messages with tool-calls
    [:name {:optional true} :string]
    [:tool-call-id {:optional true} :string]])
 
@@ -49,22 +49,19 @@
 
 (def Function
   [:map
-   [:function-name FunctionName]
-   [:function-description FunctionDescription]
-   [:function-parameters {:optional true} FunctionParameters]])
-
-(def Functions [:vector Function])
-(def FunctionCall [:or [:enum :auto :none] Function])
+   [:function/name FunctionName]
+   [:function/description FunctionDescription]
+   [:function/parameters {:optional true} FunctionParameters]])
 
 ;; Tools (newer function calling format)
 (def ToolType [:enum "function"])
 (def Tool
   [:map
-   [:tool-type ToolType]
-   [:function Function]])
+   [:type ToolType]
+   [:function {:optional true} :map]])
 
 (def Tools [:vector Tool])
-(def ToolChoice [:or [:enum :auto :none :required]])
+(def ToolChoice [:or [:enum :auto :none :required :any]])
 
 ;; ============================================================================
 ;; Request Schema
@@ -83,8 +80,6 @@
    [:presence-penalty {:optional true} PresencePenalty]
    [:stream {:optional true} Stream]
    [:stop {:optional true} Stop]
-   [:functions {:optional true} Functions]
-   [:function-call {:optional true} FunctionCall]
    [:tools {:optional true} Tools]
    [:tool-choice {:optional true} ToolChoice]])
 
@@ -185,14 +180,6 @@
    [:pool-size {:optional true} PoolSize]
    [:queue-size {:optional true} QueueSize]])
 
-(def ThreadPoolsConfig
-  [:map
-   [:api-calls {:optional true} ThreadPoolConfig]
-   [:cache-ops {:optional true} ThreadPoolConfig]
-   [:retries {:optional true} ThreadPoolConfig]
-   [:health-checks {:optional true} ThreadPoolConfig]
-   [:monitoring {:optional true} ThreadPoolConfig]])
-
 ;; ============================================================================
 ;; Cache Configuration
 ;; ============================================================================
@@ -215,7 +202,7 @@
   [:map
    [:providers {:optional true} [:map-of :string ProviderConfig]]
    [:router-config {:optional true} RouterConfig]
-   [:thread-pools-config {:optional true} ThreadPoolsConfig]
+   [:thread-pool-config {:optional true} ThreadPoolConfig]
    [:cache-config {:optional true} CacheConfig]])
 
 ;; ============================================================================

@@ -1,11 +1,11 @@
 (ns litellm.providers.openai
   "OpenAI provider implementation for LiteLLM"
   (:require [litellm.streaming :as streaming]
+            [litellm.errors :as errors]
             [hato.client :as http]
             [cheshire.core :as json]
             [clojure.tools.logging :as log]
-            [clojure.core.async :as async :refer [go >!]]
-            [com.climate.claypoole :as cp]))
+            [clojure.core.async :as async :refer [go >!]]))
 
 ;; ============================================================================
 ;; Message Transformations
@@ -109,26 +109,17 @@
   [provider response]
   (let [status (:status response)
         body (:body response)
-        error-info (get body :error {})]
-    
-    (case status
-      401 (throw (ex-info "Authentication failed" 
-                          {:type :authentication-error
-                           :provider "openai"}))
-      429 (throw (ex-info "Rate limit exceeded" 
-                          {:type :rate-limit-error
-                           :provider "openai"
-                           :retry-after (get-in response [:headers "retry-after"])}))
-      404 (throw (ex-info "Model not found" 
-                          {:type :model-not-found-error
-                           :provider "openai"
-                           :model (:model body)}))
-      (throw (ex-info (or (:message error-info) "Unknown error")
-                      {:type :provider-error
-                       :provider "openai"
-                       :status status
-                       :code (:code error-info)
-                       :data error-info})))))
+        error-info (get body :error {})
+        message (or (:message error-info) "Unknown error")
+        provider-code (:code error-info)
+        request-id (get-in response [:headers "x-request-id"])]
+    (throw (errors/http-status->error 
+             status 
+             "openai" 
+             message
+             :provider-code provider-code
+             :request-id request-id
+             :body body))))
 
 ;; ============================================================================
 ;; Model and Cost Configuration
@@ -178,24 +169,28 @@
 
 (defn make-request-impl
   "OpenAI-specific make-request implementation"
-  [provider-name transformed-request thread-pools telemetry config]
+  [provider-name transformed-request thread-pool telemetry config]
   (let [url (str (:api-base config "https://api.openai.com/v1") "/chat/completions")]
-    (cp/future (:api-calls thread-pools)
-      (let [start-time (System/currentTimeMillis)
-            response (http/post url
-                                {:headers {"Authorization" (str "Bearer " (:api-key config))
-                                           "Content-Type" "application/json"
-                                           "User-Agent" "litellm-clj/1.0.0"}
-                                 :body (json/encode transformed-request)
-                                 :timeout (:timeout config 30000)
-                                 :as :json})
-            duration (- (System/currentTimeMillis) start-time)]
-        
-        ;; Handle errors
-        (when (>= (:status response) 400)
-          (handle-error-response :openai response))
-        
-        response))))
+    (errors/wrap-http-errors
+      "openai"
+      #(let [start-time (System/currentTimeMillis)
+             response (http/post url
+                                 (conj {:headers {"Authorization" (str "Bearer " (:api-key config))
+                                                  "Content-Type" "application/json"
+                                                  "User-Agent" "litellm-clj/1.0.0"}
+                                        :body (json/encode transformed-request)
+                                        :timeout (:timeout config 30000)
+                                        :async? true
+                                        :as :json}
+                                       (when thread-pool
+                                         {:executor thread-pool})))
+             duration (- (System/currentTimeMillis) start-time)]
+         
+         ;; Handle errors if response has error status (hato may still return response for some 4xx/5xx)
+         (when (>= (:status @response) 400)
+           (handle-error-response :openai @response))
+
+         response))))
 
 (defn transform-response-impl
   "OpenAI-specific transform-response implementation"
@@ -226,16 +221,17 @@
 
 (defn health-check-impl
   "OpenAI-specific health-check implementation"
-  [provider-name thread-pools config]
-  (cp/future (:health-checks thread-pools)
-    (try
-      (let [response (http/get (str (:api-base config "https://api.openai.com/v1") "/models")
-                              {:headers {"Authorization" (str "Bearer " (:api-key config))}
-                               :timeout 5000})]
-        (= 200 (:status response)))
-      (catch Exception e
-        (log/warn "OpenAI health check failed" {:error (.getMessage e)})
-        false))))
+  [provider-name thread-pool config]
+  (try
+    (let [response (http/get (str (:api-base config "https://api.openai.com/v1") "/models")
+                             (conj {:headers {"Authorization" (str "Bearer " (:api-key config))}
+                                    :timeout 5000}
+                                   (when thread-pool
+                                     {:executor thread-pool})))]
+      (= 200 (:status response)))
+    (catch Exception e
+      (log/warn "OpenAI health check failed" {:error (.getMessage e)})
+      false)))
 
 (defn get-cost-per-token-impl
   "OpenAI-specific get-cost-per-token implementation"
@@ -263,7 +259,7 @@
 
 (defn make-streaming-request-impl
   "OpenAI-specific make-streaming-request implementation"
-  [provider-name transformed-request thread-pools config]
+  [provider-name transformed-request thread-pool config]
   (let [url (str (:api-base config "https://api.openai.com/v1") "/chat/completions")
         output-ch (streaming/create-stream-channel)]
     (go
@@ -340,13 +336,13 @@
 
 (defn test-openai-connection
   "Test OpenAI connection with a simple request"
-  [provider thread-pools telemetry]
+  [provider thread-pool telemetry]
   (let [test-request {:model "gpt-3.5-turbo"
                      :messages [{:role :user :content "Hello"}]
                      :max-tokens 5}]
     (try
       (let [transformed (transform-request-impl :openai test-request provider)
-            response-future (make-request-impl :openai transformed thread-pools telemetry provider)
+            response-future (make-request-impl :openai transformed thread-pool telemetry provider)
             response @response-future
             standard-response (transform-response-impl :openai response)]
         {:success true
