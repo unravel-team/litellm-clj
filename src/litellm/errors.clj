@@ -504,12 +504,12 @@
                provider-name
                (str "SSL error: " (.getMessage e))
                :cause e)))
-    (catch clojure.lang.ExceptionInfo e
+    (catch java.util.concurrent.ExecutionException e
       ;; Re-throw if already a litellm error
       (if (litellm-error? e)
         (throw e)
         ;; Hato throws ExceptionInfo with HTTP response in ex-data
-        (let [data (ex-data e)]
+        (let [data (-> e ex-cause ex-data)]
           (if-let [status (:status data)]
             ;; HTTP error from hato - extract response details
             (let [headers (:headers data)
