@@ -122,7 +122,6 @@
 (defn transform-response
   "Transform Gemini response to standard format"
   [response]
-  (def k* response)
   (let [body (:body response)
         candidates (:candidates body)
         usage (:usageMetadata body)]

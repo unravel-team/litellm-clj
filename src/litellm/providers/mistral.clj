@@ -301,28 +301,28 @@
   "Make embedding request to Mistral API"
   [provider input model thread-pool]
   (let [url (str (:api-base provider) "/embeddings")
-        request-body (create-embedding-request input model)]
-    (let [response (http/post url
-                              {:headers {"Authorization" (str "Bearer " (:api-key provider))
-                                         "Content-Type" "application/json"
-                                         "User-Agent" "litellm-clj/1.0.0"}
-                               :body (json/encode request-body)
-                               :timeout (:timeout provider 30000)
-                               :as :json})]
-      
-      ;; Handle errors
-      (when (>= (:status response) 400)
-        (handle-error-response provider response))
-      
-      (let [body (:body response)]
-        {:object (:object body)
-         :data (map (fn [item]
-                      {:object (:object item)
-                       :embedding (:embedding item)
-                       :index (:index item)})
-                    (:data body))
-         :model (:model body)
-         :usage (transform-usage (:usage body))}))))
+        request-body (create-embedding-request input model)
+        response (http/post url
+                            {:headers {"Authorization" (str "Bearer " (:api-key provider))
+                                       "Content-Type" "application/json"
+                                       "User-Agent" "litellm-clj/1.0.0"}
+                             :body (json/encode request-body)
+                             :timeout (:timeout provider 30000)
+                             :as :json})]
+    
+    ;; Handle errors
+    (when (>= (:status response) 400)
+      (handle-error-response provider response))
+    
+    (let [body (:body response)]
+      {:object (:object body)
+       :data (map (fn [item]
+                    {:object (:object item)
+                     :embedding (:embedding item)
+                     :index (:index item)})
+                  (:data body))
+       :model (:model body)
+       :usage (transform-usage (:usage body))})))
 
 ;; ============================================================================
 ;; Utility Functions

@@ -1,5 +1,5 @@
 (ns litellm.core-test
-  (:require [clojure.test :refer [deftest testing is use-fixtures]]
+  (:require [clojure.test :refer [deftest testing is]]
             [litellm.core :as core]
             [litellm.schemas]
             [litellm.errors :as errors]))

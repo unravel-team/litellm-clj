@@ -1,5 +1,5 @@
 (ns litellm.providers.anthropic-test
-  (:require [clojure.test :refer :all]
+  (:require [clojure.test :refer [deftest is testing]]
             [litellm.providers.anthropic :as anthropic]
             [cheshire.core :as json]))
 

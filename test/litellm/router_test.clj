@@ -1,7 +1,6 @@
 (ns litellm.router-test
   (:require [clojure.test :refer [deftest testing is use-fixtures]]
-            [litellm.router :as router]
-            [litellm.config :as config]))
+            [litellm.router :as router]))
 
 ;; Test fixture to clear registry before each test
 (defn clear-registry-fixture [f]
