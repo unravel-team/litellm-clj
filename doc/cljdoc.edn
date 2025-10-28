@@ -1,0 +1,12 @@
+{:cljdoc/languages ["clj"]
+ :cljdoc/docstring-format :markdown
+ :cljdoc.doc/tree
+ [["Readme" {:file "README.md"}]
+  ["Getting Started" {:file "doc/getting-started.md"}]
+  ["API Guide" {:file "doc/api-guide.md"}
+   ["Core API" {:file "doc/core-api.md"}]
+   ["Router API" {:file "doc/router-api.md"}]
+   ["Streaming" {:file "doc/streaming.md"}]]
+  ["Error Handling" {:file "doc/error_handling.md"}]
+  ["Examples" {:file "doc/examples.md"}]
+  ["Changelog" {:file "CHANGELOG.md"}]]}
