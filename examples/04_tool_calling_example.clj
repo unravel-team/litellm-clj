@@ -1,4 +1,4 @@
-(ns examples.03-tool-calling-example
+(ns examples.04-tool-calling-example
   "Examples demonstrating tool calling with Anthropic and Gemini providers"
   (:require [litellm.router :as router]
             [cheshire.core :as json]))
@@ -13,7 +13,7 @@
   (when (System/getenv "ANTHROPIC_API_KEY")
     (router/register! :anthropic
       {:provider :anthropic
-       :model "claude-3-5-sonnet-20241022"
+       :model "claude-haiku-4-5-20251001"
        :config {:api-key (System/getenv "ANTHROPIC_API_KEY")}}))
   
   ;; Register Gemini config
@@ -24,11 +24,11 @@
        :config {:api-key (System/getenv "GEMINI_API_KEY")}})))
 
 ;; ============================================================================
-;; Tool Definitions
+;; Tool Definitions (Standard OpenAI Format)
 ;; ============================================================================
 
 (def weather-tool
-  "Tool definition for getting weather information"
+  "Tool definition for getting weather information (OpenAI standard format)"
   {:type "function"
    :function {:name "getWeather"
              :description "Get the current weather for a location"
@@ -41,7 +41,7 @@
                          :required ["location"]}}})
 
 (def calculator-tool
-  "Tool definition for performing calculations"
+  "Tool definition for performing calculations (OpenAI standard format)"
   {:type "function"
    :function {:name "calculate"
              :description "Perform a mathematical calculation"
@@ -84,9 +84,16 @@
      :result result}))
 
 (defn execute-tool-call
-  "Execute a tool call and return the result as a string"
+  "Execute a tool call and return the result as a string.
+   
+   Tool call format (standard):
+   {:id \"call_123\"
+    :type \"function\"
+    :function {:name \"functionName\"
+              :arguments \"{...JSON string...\"}}"
   [tool-call]
   (let [function-name (get-in tool-call [:function :name])
+        ;; Arguments come as a JSON string, need to decode
         arguments (json/decode (get-in tool-call [:function :arguments]) true)]
     (json/encode
       (case function-name
@@ -99,9 +106,16 @@
 ;; ============================================================================
 
 (defn simple-weather-example
-  "Simple example of tool calling with Anthropic"
+  "Simple example of tool calling with Anthropic.
+   
+   Flow:
+   1. Send user message with tool definitions
+   2. Model responds with tool calls
+   3. Execute tool calls locally
+   4. Send tool results back (including assistant message + tool result messages)
+   5. Model responds with final answer"
   []
-  (println "\n=== Simple Weather Tool Calling Example ===\n")
+  (println "\n=== Simple Weather Tool Calling Example (Anthropic) ===\n")
   
   ;; Ensure setup is done
   (when-not (seq (router/list-configs))
@@ -109,162 +123,238 @@
   
   (when (System/getenv "ANTHROPIC_API_KEY")
     ;; Step 1: Initial request with tool definition
-    (let [response (router/completion :anthropic
-                     {:messages [{:role :user 
-                                 :content "What's the weather like in San Francisco?"}]
+    (let [user-message {:role :user 
+                       :content "What's the weather like in San Francisco?"}
+          response (router/completion :anthropic
+                     {:messages [user-message]
                       :tools [weather-tool]
                       :tool-choice :auto
                       :max-tokens 1024})]
       
-      (println "Initial response:")
-      (println "Content:" (get-in response [:choices 0 :message :content]))
+      (println "Step 1: Initial request sent")
+      (println "Model thinking:" (get-in response [:choices 0 :message :content]))
       
-      (let [tool-calls (get-in response [:choices 0 :message :tool-calls])]
-        (println "Tool calls:" (count (or tool-calls [])))
+      (let [assistant-message (get-in response [:choices 0 :message])
+            tool-calls (:tool-calls assistant-message)]
         
-        (when (seq tool-calls)
-          ;; Step 2: Execute tool calls
-          (let [tool-results (mapv (fn [tool-call]
-                                     {:role :tool
-                                      :tool-call-id (:id tool-call)
-                                      :content (execute-tool-call tool-call)})
-                                   tool-calls)
-                
-                ;; Step 3: Send tool results back to the model
-                messages [{:role :user :content "What's the weather like in San Francisco?"}
-                         (get-in response [:choices 0 :message])]
-                messages-with-results (into messages tool-results)
-                
-                final-response (router/completion :anthropic
-                                 {:messages messages-with-results
-                                  :max-tokens 1024})]
+        (if (seq tool-calls)
+          (do
+            (println "\nStep 2: Model requested tool calls:" (count tool-calls))
+            (doseq [tc tool-calls]
+              (println "  - Function:" (get-in tc [:function :name]))
+              (println "    Arguments:" (get-in tc [:function :arguments])))
             
-            (println "\nTool execution results:")
-            (doseq [result tool-results]
-              (println "  -" (:content result)))
-            
-            (println "\nFinal response:")
-            (println (get-in final-response [:choices 0 :message :content])))))))
+            ;; Step 3: Execute tool calls
+            (println "\nStep 3: Executing tool calls...")
+            (let [tool-results (mapv (fn [tool-call]
+                                       ;; Tool result format (standard):
+                                       ;; {:role :tool
+                                       ;;  :tool-call-id "call_123"
+                                       ;;  :content "result string"}
+                                       {:role :tool
+                                        :tool-call-id (:id tool-call)
+                                        :content (execute-tool-call tool-call)})
+                                     tool-calls)]
+              
+              (doseq [result tool-results]
+                (println "  - Tool result:" (:content result)))
+              
+              ;; Step 4: Send tool results back
+              ;; Important: Include user message, assistant message (with tool calls), then tool results
+              (println "\nStep 4: Sending tool results back to model...")
+              ;; Clean up assistant message - remove nil content
+              (let [clean-assistant-message (if (:content assistant-message)
+                                              assistant-message
+                                              (dissoc assistant-message :content))
+                    messages-with-results (into [user-message clean-assistant-message]
+                                               tool-results)
+                    
+                    final-response (router/completion :anthropic
+                                     {:messages messages-with-results
+                                      :max-tokens 1024})]
+                
+                (println "\nStep 5: Final response from model:")
+                (println (get-in final-response [:choices 0 :message :content])))))
+          
+          (do (println "\nNo tool calls requested. Direct response:")
+              (println (get-in response [:choices 0 :message :content])))))))
   
   (when-not (System/getenv "ANTHROPIC_API_KEY")
     (println "Skipped: ANTHROPIC_API_KEY not set")))
 
 ;; ============================================================================
-;; Example 2: Calculator (Using Anthropic)
+;; Example 2: Calculator with Gemini
 ;; ============================================================================
 
 (defn calculator-example
-  "Example of tool calling with calculator tool"
+  "Example of tool calling with calculator tool using Gemini"
   []
-  (println "\n=== Calculator Tool Calling Example ===\n")
+  (println "\n=== Calculator Tool Calling Example (Gemini) ===\n")
   
   ;; Ensure setup is done
   (when-not (seq (router/list-configs))
     (setup!))
   
-  (when (System/getenv "ANTHROPIC_API_KEY")
+  (when (System/getenv "GEMINI_API_KEY")
     ;; Step 1: Initial request
-    (let [response (router/completion :anthropic
-                                      {:messages [{:role :user 
-                                                   :content "What is 123 multiplied by 456?"}]
-                                       :tools [calculator-tool]
-                                       :tool-choice :auto
-                                       :max-tokens 1024})]
+    (let [user-message {:role :user 
+                       :content "What is 123 multiplied by 456?"}
+          response (router/completion :gemini
+                     {:messages [user-message]
+                      :tools [calculator-tool]
+                      :tool-choice :auto
+                      :max-tokens 1024})]
       
-      (println "Initial response:")
-      (println response)
-      (println "Content:" (-> response
-                              :choices
-                              first
-                              :message
-                              :tool-calls))
+      (println "Step 1: Initial request sent")
+      (println "Model thinking:" (get-in response [:choices 0 :message :content]))
       
-      (let [tool-calls (-> response
-                           :choices
-                           first
-                           :message
-                           :tool-calls)]
-        (println "Tool calls:" (count (or tool-calls [])))
+      (let [assistant-message (get-in response [:choices 0 :message])
+            tool-calls (:tool-calls assistant-message)]
         
-        (when (seq tool-calls)
-          ;; Execute and respond
-          (let [tool-results (mapv (fn [tool-call]
-                                     {:role :tool
-                                      :tool-call-id (:id tool-call)
-                                      :content (execute-tool-call tool-call)})
-                                   tool-calls)
+        (if (seq tool-calls)
+          (do
+            (println "\nStep 2: Model requested tool calls:" (count tool-calls))
+            (doseq [tc tool-calls]
+              (println "  - Function:" (get-in tc [:function :name]))
+              (println "    Arguments:" (get-in tc [:function :arguments])))
+            
+            ;; Execute and respond
+            (println "\nStep 3: Executing tool calls...")
+            (let [tool-results (mapv (fn [tool-call]
+                                       {:role :tool
+                                        :tool-call-id (:id tool-call)
+                                        :content (execute-tool-call tool-call)})
+                                     tool-calls)]
+              
+              (doseq [result tool-results]
+                (println "  - Tool result:" (:content result)))
+              
+              (println "\nStep 4: Sending tool results back to model...")
+              ;; Clean up assistant message - remove nil content
+              (let [clean-assistant-message (if (:content assistant-message)
+                                              assistant-message
+                                              (dissoc assistant-message :content))
+                    messages-with-results (into [user-message clean-assistant-message]
+                                               tool-results)
+                    
+                    final-response (router/completion :gemini
+                                     {:messages messages-with-results
+                                      :max-tokens 1024})]
                 
-                messages [{:role :user :content "What is 123 multiplied by 456?"}
-                          (-> response
-                           :choices
-                           first
-                           :message)]
-                messages-with-results (into messages tool-results)
-                _ (println messages-with-results)
-                final-response (router/completion :anthropic
-                                                  {:messages messages-with-results
-                                                   :max-tokens 1024})]
-            
-            (println "\nTool execution results:")
-            (doseq [result tool-results]
-              (println "  -" (:content result)))
-            
-            (println "\nFinal response:")
-            (println (get-in final-response [:choices 0 :message :content])))))))
+                (println "\nStep 5: Final response from model:")
+                (println (get-in final-response [:choices 0 :message :content])))))
+          
+          (do (println "\nNo tool calls requested. Direct response:")
+              (println (get-in response [:choices 0 :message :content])))))))
   
-  (when-not (System/getenv "ANTHROPIC_API_KEY")
-    (println "Skipped: ANTHROPIC_API_KEY not set")))
+  (when-not (System/getenv "GEMINI_API_KEY")
+    (println "Skipped: GEMINI_API_KEY not set")))
 
 ;; ============================================================================
-;; Example 3: Multiple Tools
+;; Example 3: Multiple Tools with Anthropic
 ;; ============================================================================
 
 (defn multi-tool-example
-  "Example with multiple tools"
+  "Example with multiple tools - model can choose which to use"
   []
-  (println "\n=== Multi-Tool Example ===\n")
+  (println "\n=== Multi-Tool Example (Anthropic) ===\n")
   
   ;; Ensure setup is done
   (when-not (seq (router/list-configs))
     (setup!))
   
   (when (System/getenv "ANTHROPIC_API_KEY")
-    (let [tools [weather-tool calculator-tool]
+    (let [user-message {:role :user 
+                       :content "What's the weather in New York, and what's 25 times 4?"}
+          tools [weather-tool calculator-tool]
           response (router/completion :anthropic
-                     {:messages [{:role :user 
-                                 :content "What's the weather in New York, and what's 25 times 4?"}]
+                     {:messages [user-message]
                       :tools tools
                       :tool-choice :auto
                       :max-tokens 1024})]
       
-      (println "Assistant's plan:")
-      (println (get-in response [:choices 0 :message :content]))
+      (println "Step 1: Initial request sent")
+      (println "Model thinking:" (get-in response [:choices 0 :message :content]))
       
-      (let [tool-calls (get-in response [:choices 0 :message :tool-calls])]
+      (let [assistant-message (get-in response [:choices 0 :message])
+            tool-calls (:tool-calls assistant-message)]
+        
         (when (seq tool-calls)
-          (println "\nExecuting" (count tool-calls) "tool call(s):")
+          (println "\nStep 2: Model requested" (count tool-calls) "tool call(s):")
           (doseq [tc tool-calls]
-            (println "  -" (get-in tc [:function :name])))
+            (println "  -" (get-in tc [:function :name]) 
+                    "with args:" (get-in tc [:function :arguments])))
           
+          ;; Execute all tool calls
+          (println "\nStep 3: Executing tool calls...")
           (let [tool-results (mapv (fn [tool-call]
                                      {:role :tool
                                       :tool-call-id (:id tool-call)
                                       :content (execute-tool-call tool-call)})
-                                   tool-calls)
-                
-                messages [{:role :user :content "What's the weather in New York, and what's 25 times 4?"}
-                         (get-in response [:choices 0 :message])]
-                messages-with-results (into messages tool-results)
-                
-                final-response (router/completion :anthropic
-                                 {:messages messages-with-results
-                                  :max-tokens 1024})]
+                                   tool-calls)]
             
-            (println "\nFinal response:")
-            (println (get-in final-response [:choices 0 :message :content])))))))
+            (doseq [result tool-results]
+              (println "  - Result:" (:content result)))
+            
+            ;; Send back all results
+            (println "\nStep 4: Sending all tool results back...")
+            ;; Clean up assistant message - remove nil content
+            (let [clean-assistant-message (if (:content assistant-message)
+                                            assistant-message
+                                            (dissoc assistant-message :content))
+                  messages-with-results (into [user-message clean-assistant-message]
+                                             tool-results)
+                  
+                  final-response (router/completion :anthropic
+                                   {:messages messages-with-results
+                                    :max-tokens 1024})]
+              
+              (println "\nStep 5: Final response:")
+              (println (get-in final-response [:choices 0 :message :content])))))))
   
   (when-not (System/getenv "ANTHROPIC_API_KEY")
-    (println "Skipped: ANTHROPIC_API_KEY not set")))
+    (println "Skipped: ANTHROPIC_API_KEY not set"))))
+
+;; ============================================================================
+;; Example 4: Understanding Tool Call Format
+;; ============================================================================
+
+(defn format-demo-example
+  "Demonstrates the exact format of tool calls and results"
+  []
+  (println "\n=== Tool Calling Format Demo ===\n")
+  
+  (println "Tool Definition Format (OpenAI standard):")
+  (println "```clojure")
+  (println "{:type \"function\"")
+  (println " :function {:name \"functionName\"")
+  (println "           :description \"Function description\"")
+  (println "           :parameters {:type \"object\"")
+  (println "                       :properties {...}") 
+  (println "                       :required [...]}}}")
+  (println "```")
+  
+  (println "\nTool Call Format (in response):")
+  (println "```clojure")
+  (println "{:id \"call_abc123\"")
+  (println " :type \"function\"")
+  (println " :function {:name \"functionName\"")
+  (println "           :arguments \"{\\\"key\\\":\\\"value\\\"}\"}}  ; JSON string!")
+  (println "```")
+  
+  (println "\nTool Result Format (in messages):")
+  (println "```clojure")
+  (println "{:role :tool")
+  (println " :tool-call-id \"call_abc123\"  ; Must match the tool call ID")
+  (println " :content \"result as string\"}")
+  (println "```")
+  
+  (println "\nMessage Flow:")
+  (println "1. User message → Model")
+  (println "2. Model → Assistant message with :tool-calls")
+  (println "3. Execute tools locally")
+  (println "4. [User msg, Assistant msg with tool calls, Tool result(s)] → Model")
+  (println "5. Model → Final assistant message"))
 
 ;; ============================================================================
 ;; Main Function
@@ -279,6 +369,9 @@
   
   ;; Setup configs
   (setup!)
+  
+  ;; Show format first
+  (format-demo-example)
   
   ;; Run examples
   (simple-weather-example)
@@ -298,7 +391,8 @@
   (setup!)
   
   ;; Run individual examples
-  (simple-weather-example)  ;; Uses Anthropic
+  (format-demo-example)      ;; Shows format
+  (simple-weather-example)   ;; Uses Anthropic
   (calculator-example)       ;; Uses Gemini
   (multi-tool-example)       ;; Uses Anthropic
   
