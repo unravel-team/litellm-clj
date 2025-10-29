@@ -94,16 +94,36 @@
                            :arguments (json/encode (:input tool-use))}})
               tool-uses))))
 
+(defn extract-reasoning-content
+  "Extract reasoning content from Anthropic response content blocks"
+  [content]
+  (when-let [thinking-blocks (seq (filter #(= "thinking" (:type %)) content))]
+    (str/join "\n" (map :thinking thinking-blocks))))
+
+(defn extract-thinking-blocks
+  "Extract thinking blocks from Anthropic response content blocks"
+  [content]
+  (when-let [thinking-blocks (seq (filter #(= "thinking" (:type %)) content))]
+    (vec (map (fn [block]
+                {:type "thinking"
+                 :thinking (:thinking block)
+                 :signature (:signature block)})
+              thinking-blocks))))
+
 (defn transform-choice
   "Transform Anthropic response to standard choice format"
   [response index]
   (let [content (:content response)
         text-content (some #(when (= "text" (:type %)) (:text %)) content)
-        tool-calls (transform-tool-calls content)]
+        tool-calls (transform-tool-calls content)
+        reasoning-content (extract-reasoning-content content)
+        thinking-blocks (extract-thinking-blocks content)]
     {:index index
-     :message {:role :assistant
-               :content text-content
-               :tool-calls tool-calls}
+     :message (cond-> {:role :assistant
+                       :content text-content
+                       :tool-calls tool-calls}
+                reasoning-content (assoc :reasoning-content reasoning-content)
+                thinking-blocks (assoc :thinking-blocks thinking-blocks))
      :finish-reason (keyword (:stop_reason response))}))
 
 (defn transform-usage
@@ -173,6 +193,22 @@
         model))
     (str model)))
 
+(defn reasoning-effort->thinking-config
+  "Convert reasoning-effort keyword to Anthropic thinking config"
+  [reasoning-effort]
+  (case reasoning-effort
+    :low {:type "enabled" :budget_tokens 1024}
+    :medium {:type "enabled" :budget_tokens 4096}
+    :high {:type "enabled" :budget_tokens 10000}
+    nil))
+
+(defn transform-thinking-config
+  "Transform thinking config from Clojure to Anthropic format"
+  [thinking-config]
+  (when thinking-config
+    {:type (name (:type thinking-config))
+     :budget_tokens (:budget-tokens thinking-config)}))
+
 (defn transform-request-impl
   "Anthropic-specific transform-request implementation"
   [provider-name request config]
@@ -182,11 +218,16 @@
         ;; Anthropic doesn't allow both temperature and top_p - prefer temperature if both are specified
         has-temperature? (contains? request :temperature)
         has-top-p? (contains? request :top-p)
+        ;; Handle reasoning parameters - thinking takes precedence over reasoning-effort
+        thinking-param (cond
+                         (:thinking request) (transform-thinking-config (:thinking request))
+                         (:reasoning-effort request) (reasoning-effort->thinking-config (:reasoning-effort request))
+                         :else nil)
         transformed {:model mapped-model
                      :max_tokens (:max-tokens request 1024)
                      :stream (:stream request false)}]
     
-    ;; Add system prompt, messages, tools if present
+    ;; Add system prompt, messages, tools, thinking if present
     ;; Only add one of temperature or top_p (Anthropic constraint)
     (cond-> transformed
       has-temperature? (assoc :temperature (:temperature request))
@@ -195,7 +236,8 @@
       (:system messages-data) (assoc :system (:system messages-data))
       (:messages messages-data) (assoc :messages (:messages messages-data))
       (:tools request) (assoc :tools (transform-tools (:tools request)))
-      (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request))))))
+      (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request)))
+      thinking-param (assoc :thinking thinking-param))))
 
 (defn make-request-impl
   "Anthropic-specific make-request implementation"
@@ -279,7 +321,9 @@
   [provider-name chunk]
   (let [event-type (:type chunk)]
     (case event-type
-      "content_block_start" (when (= "tool_use" (get-in chunk [:content_block :type]))
+      "content_block_start" (cond
+                              ;; Tool use start
+                              (= "tool_use" (get-in chunk [:content_block :type]))
                               {:id (:message_id chunk)
                                :object "chat.completion.chunk"
                                :created (quot (System/currentTimeMillis) 1000)
@@ -290,7 +334,22 @@
                                                              :type "function"
                                                              :function {:name (get-in chunk [:content_block :name])
                                                                        :arguments ""}}]}
-                                         :finish-reason nil}]})
+                                         :finish-reason nil}]}
+                              
+                              ;; Thinking block start
+                              (= "thinking" (get-in chunk [:content_block :type]))
+                              {:id (:message_id chunk)
+                               :object "chat.completion.chunk"
+                               :created (quot (System/currentTimeMillis) 1000)
+                               :model (:model chunk)
+                               :choices [{:index 0
+                                         :delta {:role :assistant
+                                                :thinking-blocks [{:type "thinking"
+                                                                  :thinking ""
+                                                                  :signature ""}]}
+                                         :finish-reason nil}]}
+                              
+                              :else nil)
       "content_block_delta" (cond
                               ;; Text delta
                               (get-in chunk [:delta :text])
@@ -311,6 +370,16 @@
                                :model (:model chunk)
                                :choices [{:index 0
                                          :delta {:tool-calls [{:function {:arguments (get-in chunk [:delta :partial_json])}}]}
+                                         :finish-reason nil}]}
+                              
+                              ;; Thinking delta
+                              (get-in chunk [:delta :thinking])
+                              {:id (:message_id chunk)
+                               :object "chat.completion.chunk"
+                               :created (quot (System/currentTimeMillis) 1000)
+                               :model (:model chunk)
+                               :choices [{:index 0
+                                         :delta {:reasoning-content (get-in chunk [:delta :thinking])}
                                          :finish-reason nil}]}
                               
                               :else nil)

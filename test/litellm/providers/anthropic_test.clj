@@ -140,6 +140,110 @@
   (testing "Anthropic supports function calling"
     (is (true? (anthropic/supports-function-calling-impl :anthropic)))))
 
+(deftest test-reasoning-effort-transformation
+  (testing "Transform reasoning-effort :low"
+    (is (= {:type "enabled" :budget_tokens 1024}
+           (anthropic/reasoning-effort->thinking-config :low))))
+  
+  (testing "Transform reasoning-effort :medium"
+    (is (= {:type "enabled" :budget_tokens 4096}
+           (anthropic/reasoning-effort->thinking-config :medium))))
+  
+  (testing "Transform reasoning-effort :high"
+    (is (= {:type "enabled" :budget_tokens 10000}
+           (anthropic/reasoning-effort->thinking-config :high))))
+  
+  (testing "Transform nil reasoning-effort"
+    (is (nil? (anthropic/reasoning-effort->thinking-config nil)))))
+
+(deftest test-thinking-config-transformation
+  (testing "Transform thinking config"
+    (is (= {:type "enabled" :budget_tokens 2048}
+           (anthropic/transform-thinking-config {:type :enabled :budget-tokens 2048}))))
+  
+  (testing "Transform nil thinking config"
+    (is (nil? (anthropic/transform-thinking-config nil)))))
+
+(deftest test-transform-request-with-reasoning-effort
+  (testing "Transform request with reasoning-effort"
+    (let [request {:model "claude-3-7-sonnet-20250219"
+                  :messages [{:role :user :content "What is 2+2?"}]
+                  :reasoning-effort :low
+                  :max-tokens 1024}
+          config {:api-key "test-key"}
+          result (anthropic/transform-request-impl :anthropic request config)]
+      
+      (is (= "claude-3-7-sonnet-20250219" (:model result)))
+      (is (= {:type "enabled" :budget_tokens 1024} (:thinking result))))))
+
+(deftest test-transform-request-with-thinking-config
+  (testing "Transform request with explicit thinking config"
+    (let [request {:model "claude-3-7-sonnet-20250219"
+                  :messages [{:role :user :content "Explain quantum physics"}]
+                  :thinking {:type :enabled :budget-tokens 5000}
+                  :max-tokens 1024}
+          config {:api-key "test-key"}
+          result (anthropic/transform-request-impl :anthropic request config)]
+      
+      (is (= "claude-3-7-sonnet-20250219" (:model result)))
+      (is (= {:type "enabled" :budget_tokens 5000} (:thinking result))))))
+
+(deftest test-extract-reasoning-content
+  (testing "Extract reasoning content from response"
+    (let [content [{:type "thinking" :thinking "Let me think about this step by step..."}
+                   {:type "text" :text "The answer is 4."}]
+          result (anthropic/extract-reasoning-content content)]
+      
+      (is (= "Let me think about this step by step..." result))))
+  
+  (testing "Extract multiple thinking blocks"
+    (let [content [{:type "thinking" :thinking "First, I'll consider..."}
+                   {:type "text" :text "Some text"}
+                   {:type "thinking" :thinking "Then, I'll analyze..."}]
+          result (anthropic/extract-reasoning-content content)]
+      
+      (is (= "First, I'll consider...\nThen, I'll analyze..." result))))
+  
+  (testing "No reasoning content"
+    (let [content [{:type "text" :text "Just text"}]
+          result (anthropic/extract-reasoning-content content)]
+      
+      (is (nil? result)))))
+
+(deftest test-extract-thinking-blocks
+  (testing "Extract thinking blocks from response"
+    (let [content [{:type "thinking" 
+                    :thinking "Step 1: Analyze the problem"
+                    :signature "sig123"}
+                   {:type "text" :text "The answer is..."}]
+          result (anthropic/extract-thinking-blocks content)]
+      
+      (is (= 1 (count result)))
+      (is (= "thinking" (:type (first result))))
+      (is (= "Step 1: Analyze the problem" (:thinking (first result))))
+      (is (= "sig123" (:signature (first result))))))
+  
+  (testing "No thinking blocks"
+    (let [content [{:type "text" :text "Just text"}]
+          result (anthropic/extract-thinking-blocks content)]
+      
+      (is (nil? result)))))
+
+(deftest test-transform-choice-with-reasoning
+  (testing "Transform response with reasoning content"
+    (let [response {:content [{:type "thinking" 
+                              :thinking "Let me solve this step by step..."
+                              :signature "sig456"}
+                             {:type "text" :text "The answer is 4."}]
+                   :stop_reason "end_turn"}
+          result (anthropic/transform-choice response 0)]
+      
+      (is (= :assistant (get-in result [:message :role])))
+      (is (= "The answer is 4." (get-in result [:message :content])))
+      (is (= "Let me solve this step by step..." (get-in result [:message :reasoning-content])))
+      (is (= 1 (count (get-in result [:message :thinking-blocks]))))
+      (is (= "thinking" (get-in result [:message :thinking-blocks 0 :type]))))))
+
 (deftest test-transform-streaming-chunk-with-tool-use
   (testing "Transform streaming chunk with tool use start"
     (let [chunk {:type "content_block_start"
@@ -164,3 +268,25 @@
       
       (is (= "msg_123" (:id result)))
       (is (= "{\"location\":" (get-in result [:choices 0 :delta :tool-calls 0 :function :arguments]))))))
+
+(deftest test-transform-streaming-chunk-with-thinking
+  (testing "Transform streaming chunk with thinking block start"
+    (let [chunk {:type "content_block_start"
+                :message_id "msg_789"
+                :content_block {:type "thinking"}}
+          result (anthropic/transform-streaming-chunk-impl :anthropic chunk)]
+      
+      (is (= "msg_789" (:id result)))
+      (is (= "chat.completion.chunk" (:object result)))
+      (is (= :assistant (get-in result [:choices 0 :delta :role])))
+      (is (= 1 (count (get-in result [:choices 0 :delta :thinking-blocks]))))
+      (is (= "thinking" (get-in result [:choices 0 :delta :thinking-blocks 0 :type])))))
+  
+  (testing "Transform streaming chunk with thinking delta"
+    (let [chunk {:type "content_block_delta"
+                :message_id "msg_789"
+                :delta {:thinking "Let me analyze this..."}}
+          result (anthropic/transform-streaming-chunk-impl :anthropic chunk)]
+      
+      (is (= "msg_789" (:id result)))
+      (is (= "Let me analyze this..." (get-in result [:choices 0 :delta :reasoning-content]))))))
