@@ -35,11 +35,21 @@
                                                 :content (:content msg)}])
                           
                           ;; Assistant message with tool calls
+                          ;; IMPORTANT: When thinking is enabled, thinking blocks MUST come first
                           (and (= :assistant (:role msg)) (:tool-calls msg))
                           (assoc base :content 
                                  (vec (concat
+                                       ;; First: thinking blocks (if present)
+                                       (when-let [thinking-blocks (:thinking-blocks msg)]
+                                         (map (fn [block]
+                                                {:type "thinking"
+                                                 :thinking (:thinking block)
+                                                 :signature (:signature block)})
+                                              thinking-blocks))
+                                       ;; Second: text content (if present)
                                        (when (:content msg)
                                          [{:type "text" :text (:content msg)}])
+                                       ;; Third: tool uses
                                        (map (fn [tool-call]
                                               {:type "tool_use"
                                                :id (:id tool-call)

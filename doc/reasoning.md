@@ -154,6 +154,7 @@ Reasoning content can be streamed for progressive rendering:
 (defn solve-with-reasoning [problem]
   (let [response (core/completion :anthropic "claude-3-7-sonnet-20250219"
                    {:messages [{:role :user :content problem}]
+                    :max-tokens 5000
                     :reasoning-effort :medium}
                    {:api-key (System/getenv "ANTHROPIC_API_KEY")})]
     
@@ -187,9 +188,10 @@ Reasoning content can be streamed for progressive rendering:
       response1 (core/completion :anthropic "claude-3-7-sonnet-20250219"
                   {:messages [{:role :user 
                               :content "What's the weather in Paris?"}]
+                   :max-tokens 5000
                    :tools tools
                    :reasoning-effort :medium}
-                  {:api-key "sk-ant-..."})]
+                  {:api-key (System/getenv "ANTHROPIC_API_KEY")})]
   
   ;; Model's reasoning about which tool to call
   (println "Reasoning:" 
@@ -206,8 +208,9 @@ Reasoning content can be streamed for progressive rendering:
                                {:role :tool
                                 :tool-call-id (:id tool-call)
                                 :content result}]
+                     :max-tokens 5000
                      :reasoning-effort :medium}
-                    {:api-key "sk-ant-..."})]
+                    {:api-key (System/getenv "ANTHROPIC_API_KEY")})]
     
     (println "Final answer:" 
              (get-in response2 [:choices 0 :message :content]))))
