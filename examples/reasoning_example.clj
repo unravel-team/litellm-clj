@@ -19,6 +19,7 @@
                   "claude-3-7-sonnet-20250219"
                   {:messages [{:role :user 
                               :content "What is the capital of France?"}]
+                   :max-tokens 2000
                    :reasoning-effort :low}
                   {:api-key (System/getenv "ANTHROPIC_API_KEY")})]
     
@@ -100,7 +101,7 @@
       (when (seq tool-calls)
         (let [tool-call (first tool-calls)
               tool-name (get-in tool-call [:function :name])
-              tool-args (json/read-str (get-in tool-call [:function :arguments]) :key-fn keyword)
+              tool-args (json/parse-string (get-in tool-call [:function :arguments]) :key-fn keyword)
               tool-result (get-weather (:location tool-args))
               
               response2 (litellm/completion
@@ -161,7 +162,7 @@
   (println "\n=== Comparing Reasoning Efforts ===\n")
   
   (let [question "What are the implications of artificial intelligence on society?"
-        efforts [:low :medium :high]]
+        efforts [:low]]
     
     (doseq [effort efforts]
       (println (str "\n--- Reasoning Effort: " (name effort) " ---"))
@@ -170,7 +171,7 @@
                       "claude-3-7-sonnet-20250219"
                       {:messages [{:role :user :content question}]
                        :reasoning-effort effort
-                       :max-tokens 500}
+                       :max-tokens 10000}
                       {:api-key (System/getenv "ANTHROPIC_API_KEY")})]
         
         (println "Response length:" (count (get-in response [:choices 0 :message :content])))
