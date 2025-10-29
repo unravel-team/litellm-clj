@@ -2,7 +2,7 @@
   "Example demonstrating reasoning/thinking content support with Anthropic models"
   (:require [litellm.core :as litellm]
             [clojure.pprint :as pprint]
-            [clojure.data.json :as json]
+            [cheshire.core :as json]
             [clojure.core.async :as async]))
 
 ;; ============================================================================
