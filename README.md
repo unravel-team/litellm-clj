@@ -68,7 +68,7 @@ LiteLLM Clojure provides a unified, idiomatic Clojure interface for interacting 
 Add to your `deps.edn`:
 
 ```clojure
-{:deps {tech.unravel/litellm-clj {:mvn/version "0.2.0"}}}
+{:deps {tech.unravel/litellm-clj {:mvn/version "0.3.0-alpha"}}}
 ```
 
 ### Using Leiningen
@@ -76,7 +76,7 @@ Add to your `deps.edn`:
 Add to your `project.clj`:
 
 ```clojure
-[tech.unravel/litellm-clj "0.2.0"]
+[tech.unravel/litellm-clj "0.3.0-alpha"]
 ```
 
 ---
