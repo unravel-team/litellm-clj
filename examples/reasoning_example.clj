@@ -162,7 +162,7 @@
   (println "\n=== Comparing Reasoning Efforts ===\n")
   
   (let [question "What are the implications of artificial intelligence on society?"
-        efforts [:low]]
+        efforts [:low :medium :high]]
     
     (doseq [effort efforts]
       (println (str "\n--- Reasoning Effort: " (name effort) " ---"))
@@ -171,7 +171,7 @@
                       "claude-3-7-sonnet-20250219"
                       {:messages [{:role :user :content question}]
                        :reasoning-effort effort
-                       :max-tokens 10000}
+                       :max-tokens 10500}
                       {:api-key (System/getenv "ANTHROPIC_API_KEY")})]
         
         (println "Response length:" (count (get-in response [:choices 0 :message :content])))
