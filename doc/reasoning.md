@@ -16,11 +16,11 @@ LiteLLM Clojure provides support for sending and receiving reasoning tokens from
 | Provider     | Reasoning Support | Models |
 |--------------|-------------------|--------|
 | Anthropic    | ✅ Yes           | Claude 3.7 Sonnet |
-| OpenAI       | 🔄 Coming Soon   | o1, o1-mini, o1-preview |
+| OpenAI       | ✅ Yes           | o1, o1-mini, o1-preview |
 | Deepseek     | 🔄 Coming Soon   | deepseek-chat |
 | XAI          | 🔄 Coming Soon   | grok models |
 
-**Note**: Currently only Anthropic provider is fully implemented. Support for other providers will be added in future releases.
+**Note**: Anthropic and OpenAI providers are now fully implemented. Support for other providers will be added in future releases.
 
 ## Quick Start
 
@@ -28,6 +28,7 @@ LiteLLM Clojure provides support for sending and receiving reasoning tokens from
 
 The simplest way to enable reasoning is using the `reasoning-effort` parameter:
 
+**Anthropic Example:**
 ```clojure
 (require '[litellm.core :as core])
 
@@ -40,6 +41,23 @@ The simplest way to enable reasoning is using the `reasoning-effort` parameter:
 ;; Access reasoning content
 (get-in response [:choices 0 :message :reasoning-content])
 ;; => "Let me think about this. France is a country in Europe..."
+
+;; Access the actual answer
+(get-in response [:choices 0 :message :content])
+;; => "The capital of France is Paris."
+```
+
+**OpenAI Example:**
+```clojure
+(def response
+  (core/completion :openai "o1"
+    {:messages [{:role :user :content "What is the capital of France?"}]
+     :reasoning-effort :medium}
+    {:api-key "sk-..."}))
+
+;; Access reasoning content
+(get-in response [:choices 0 :message :reasoning-content])
+;; => "To answer this question, I need to recall..."
 
 ;; Access the actual answer
 (get-in response [:choices 0 :message :content])

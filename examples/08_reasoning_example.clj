@@ -1,18 +1,18 @@
 (ns examples.reasoning-example
-  "Example demonstrating reasoning/thinking content support with Anthropic models"
+  "Example demonstrating reasoning/thinking content support with Anthropic and OpenAI models"
   (:require [litellm.core :as litellm]
             [clojure.pprint :as pprint]
             [cheshire.core :as json]
             [clojure.core.async :as async]))
 
 ;; ============================================================================
-;; Basic Reasoning with reasoning-effort
+;; Basic Reasoning with reasoning-effort - Anthropic
 ;; ============================================================================
 
 (defn basic-reasoning-example
-  "Demonstrate basic reasoning with reasoning-effort parameter"
+  "Demonstrate basic reasoning with reasoning-effort parameter (Anthropic)"
   []
-  (println "\n=== Basic Reasoning Example ===\n")
+  (println "\n=== Basic Reasoning Example (Anthropic) ===\n")
   
   (let [response (litellm/completion
                   :anthropic
@@ -31,6 +31,31 @@
     (when-let [thinking-blocks (get-in response [:choices 0 :message :thinking-blocks])]
       (println "\nThinking Blocks:")
       (pprint/pprint thinking-blocks))))
+
+;; ============================================================================
+;; Basic Reasoning with reasoning-effort - OpenAI
+;; ============================================================================
+
+(defn basic-reasoning-example-openai
+  "Demonstrate basic reasoning with reasoning-effort parameter (OpenAI)"
+  []
+  (println "\n=== Basic Reasoning Example (OpenAI) ===\n")
+  
+  (let [response (litellm/completion
+                  :openai
+                  "o1"
+                  {:messages [{:role :user 
+                              :content "What is the capital of France?"}]
+                   :reasoning-effort :medium}
+                  {:api-key (System/getenv "OPENAI_API_KEY")})]
+    
+    (println "Response:")
+    (println "Content:" (get-in response [:choices 0 :message :content]))
+    (when-let [reasoning (get-in response [:choices 0 :message :reasoning-content])]
+      (println "\nReasoning Content:")
+      (println reasoning))
+    (println "\nUsage:")
+    (pprint/pprint (:usage response))))
 
 ;; ============================================================================
 ;; Advanced Reasoning with thinking config
@@ -186,17 +211,24 @@
 (defn -main
   []
   (try
-    ;; Check for API key
-    (when-not (System/getenv "ANTHROPIC_API_KEY")
-      (println "ERROR: ANTHROPIC_API_KEY environment variable not set")
-      (System/exit 1))
+    ;; Run Anthropic examples if API key is set
+    (when (System/getenv "ANTHROPIC_API_KEY")
+      (println "\n=== Running Anthropic Examples ===")
+      (basic-reasoning-example)
+      (advanced-reasoning-example)
+      (reasoning-with-tools-example)
+      (streaming-reasoning-example)
+      (compare-reasoning-efforts))
     
-    ;; Run examples
-    (basic-reasoning-example)
-    (advanced-reasoning-example)
-    (reasoning-with-tools-example)
-    (streaming-reasoning-example)
-    (compare-reasoning-efforts)
+    ;; Run OpenAI examples if API key is set
+    (when (System/getenv "OPENAI_API_KEY")
+      (println "\n=== Running OpenAI Examples ===")
+      (basic-reasoning-example-openai))
+    
+    (when-not (or (System/getenv "ANTHROPIC_API_KEY")
+                  (System/getenv "OPENAI_API_KEY"))
+      (println "ERROR: Neither ANTHROPIC_API_KEY nor OPENAI_API_KEY environment variable is set")
+      (System/exit 1))
     
     (println "\n=== All examples completed successfully ===")
     
@@ -206,12 +238,15 @@
       (System/exit 1))))
 
 (comment
-  ;; Run individual examples
+  ;; Run individual Anthropic examples
   (basic-reasoning-example)
   (advanced-reasoning-example)
   (reasoning-with-tools-example)
   (streaming-reasoning-example)
   (compare-reasoning-efforts)
+  
+  ;; Run OpenAI example
+  (basic-reasoning-example-openai)
   
   ;; Run all
   (-main))
