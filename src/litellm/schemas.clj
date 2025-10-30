@@ -16,7 +16,9 @@
    [:role Role]
    [:content {:optional true} :string]  ; Allow nil for assistant messages with tool-calls
    [:name {:optional true} :string]
-   [:tool-call-id {:optional true} :string]])
+   [:tool-call-id {:optional true} :string]
+   [:reasoning-content {:optional true} :string]  ; Reasoning/thinking content from models
+   [:thinking-blocks {:optional true} [:vector :map]]])  ; Thinking blocks (Anthropic-specific)
 
 (def Messages
   [:vector {:min 1} Message])
@@ -63,6 +65,13 @@
 (def Tools [:vector Tool])
 (def ToolChoice [:or [:enum :auto :none :required :any]])
 
+;; Reasoning parameters
+(def ReasoningEffort [:enum :low :medium :high])
+(def ThinkingConfig
+  [:map
+   [:type [:enum :enabled]]
+   [:budget-tokens {:optional true} :int]])
+
 ;; ============================================================================
 ;; Request Schema
 ;; ============================================================================
@@ -81,7 +90,9 @@
    [:stream {:optional true} Stream]
    [:stop {:optional true} Stop]
    [:tools {:optional true} Tools]
-   [:tool-choice {:optional true} ToolChoice]])
+   [:tool-choice {:optional true} ToolChoice]
+   [:reasoning-effort {:optional true} ReasoningEffort]
+   [:thinking {:optional true} ThinkingConfig]])
 
 ;; ============================================================================
 ;; Response Schemas
