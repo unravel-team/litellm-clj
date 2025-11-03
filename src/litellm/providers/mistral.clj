@@ -291,38 +291,56 @@
 ;; Embedding Support
 ;; ============================================================================
 
-(defn create-embedding-request
-  "Transform embedding request to Mistral format"
-  [input model]
-  {:input (if (string? input) [input] input)
-   :model (or model "mistral-embed")})
+(defn transform-embedding-request-impl
+  "Mistral-specific transform-embedding-request implementation"
+  [provider-name request config]
+  (let [model (:model request)
+        input (:input request)]
+    {:input (if (string? input) [input] input)
+     :model model}))
 
-(defn make-embedding-request
-  "Make embedding request to Mistral API"
-  [provider input model thread-pool]
-  (let [url (str (:api-base provider) "/embeddings")
-        request-body (create-embedding-request input model)
-        response (http/post url
-                            {:headers {"Authorization" (str "Bearer " (:api-key provider))
-                                       "Content-Type" "application/json"
-                                       "User-Agent" "litellm-clj/1.0.0"}
-                             :body (json/encode request-body)
-                             :timeout (:timeout provider 30000)
-                             :as :json})]
-    
-    ;; Handle errors
-    (when (>= (:status response) 400)
-      (handle-error-response provider response))
-    
-    (let [body (:body response)]
-      {:object (:object body)
-       :data (map (fn [item]
-                    {:object (:object item)
-                     :embedding (:embedding item)
-                     :index (:index item)})
-                  (:data body))
-       :model (:model body)
-       :usage (transform-usage (:usage body))})))
+(defn make-embedding-request-impl
+  "Mistral-specific make-embedding-request implementation"
+  [provider-name transformed-request thread-pool telemetry config]
+  (let [url (str (:api-base config "https://api.mistral.ai/v1") "/embeddings")]
+    (errors/wrap-http-errors
+      "mistral"
+      #(let [start-time (System/currentTimeMillis)
+             response (http/post url
+                                 (conj {:headers {"Authorization" (str "Bearer " (:api-key config))
+                                                  "Content-Type" "application/json"
+                                                  "User-Agent" "litellm-clj/1.0.0"}
+                                        :body (json/encode transformed-request)
+                                        :timeout (:timeout config 30000)
+                                        :async? true
+                                        :as :json}
+                                       (when thread-pool
+                                         {:executor thread-pool})))
+             duration (- (System/currentTimeMillis) start-time)]
+         
+         ;; Handle errors if response has error status
+         (when (>= (:status @response) 400)
+           (handle-error-response :mistral @response))
+         
+         response))))
+
+(defn transform-embedding-response-impl
+  "Mistral-specific transform-embedding-response implementation"
+  [provider-name response]
+  (let [body (:body response)]
+    {:object (:object body)
+     :data (map (fn [item]
+                  {:object (:object item)
+                   :embedding (:embedding item)
+                   :index (:index item)})
+                (:data body))
+     :model (:model body)
+     :usage (transform-usage (:usage body))}))
+
+(defn supports-embeddings-impl
+  "Mistral-specific supports-embeddings? implementation"
+  [provider-name]
+  true)
 
 ;; ============================================================================
 ;; Utility Functions

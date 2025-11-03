@@ -126,6 +126,39 @@
    [:usage Usage]])
 
 ;; ============================================================================
+;; Embedding Schemas
+;; ============================================================================
+
+(def Input [:or :string [:vector :string]])
+(def EncodingFormat [:enum :float :base64])
+(def Dimensions :int)
+
+(def EmbeddingRequest
+  [:map
+   [:model Model]
+   [:input Input]
+   [:api-key {:optional true} ApiKey]
+   [:api-base {:optional true} ApiBase]
+   [:encoding-format {:optional true} EncodingFormat]
+   [:dimensions {:optional true} Dimensions]
+   [:user {:optional true} :string]
+   [:timeout {:optional true} :int]
+   [:input-type {:optional true} [:enum :query :passage :text :image :video :audio]]])
+
+(def EmbeddingObject
+  [:map
+   [:object :string]
+   [:embedding [:vector :double]]
+   [:index :int]])
+
+(def EmbeddingResponse
+  [:map
+   [:object :string]
+   [:data [:vector EmbeddingObject]]
+   [:model :string]
+   [:usage Usage]])
+
+;; ============================================================================
 ;; Provider Configuration
 ;; ============================================================================
 
@@ -242,6 +275,28 @@
   (when-not (valid-config? config)
     (me/humanize (m/explain SystemConfig config))))
 
+(defn valid-embedding-request?
+  "Check if an embedding request is valid"
+  [request]
+  (m/validate EmbeddingRequest request))
+
+(defn explain-embedding-request
+  "Explain what's wrong with an embedding request"
+  [request]
+  (when-not (valid-embedding-request? request)
+    (me/humanize (m/explain EmbeddingRequest request))))
+
+(defn valid-embedding-response?
+  "Check if an embedding response is valid"
+  [response]
+  (m/validate EmbeddingResponse response))
+
+(defn explain-embedding-response
+  "Explain what's wrong with an embedding response"
+  [response]
+  (when-not (valid-embedding-response? response)
+    (me/humanize (m/explain EmbeddingResponse response))))
+
 (defn validate-request!
   "Validate request and throw exception if invalid"
   [request]
@@ -268,6 +323,24 @@
                     {:type :validation-error
                      :errors (explain-config config)})))
   config)
+
+(defn validate-embedding-request!
+  "Validate embedding request and throw exception if invalid"
+  [request]
+  (when-not (valid-embedding-request? request)
+    (throw (ex-info "Invalid embedding request"
+                    {:type :validation-error
+                     :errors (explain-embedding-request request)})))
+  request)
+
+(defn validate-embedding-response!
+  "Validate embedding response and throw exception if invalid"
+  [response]
+  (when-not (valid-embedding-response? response)
+    (throw (ex-info "Invalid embedding response"
+                    {:type :validation-error
+                     :errors (explain-embedding-response response)})))
+  response)
 
 ;; ============================================================================
 ;; Transformation Helpers

@@ -139,6 +139,71 @@
     (completion provider-name model request (dissoc config :system-prompt))))
 
 ;; ============================================================================
+;; Core Embedding API
+;; ============================================================================
+
+(defn embedding
+  "Generate embeddings for text input.
+  
+  **Parameters:**
+  - `provider` - Provider keyword (`:openai`, `:mistral`, `:gemini`)
+  - `model` - Model name string (e.g., `\"text-embedding-3-small\"`, `\"mistral-embed\"`)
+  - `request-map` - Request with `:input` (string or vector of strings)
+  - `config` - Optional config with `:api-key`, `:api-base`, `:timeout`
+  
+  **Returns:**
+  - Response map with `:data` (vector of embeddings), `:usage`, etc.
+  
+  **Examples:**
+  
+  ```clojure
+  ;; Single text embedding
+  (embedding :openai \"text-embedding-3-small\" 
+             {:input \"Hello world\"}
+             {:api-key \"sk-...\"})
+  
+  ;; Multiple texts
+  (embedding :openai \"text-embedding-3-small\"
+             {:input [\"Hello\" \"World\"]}
+             {:api-key \"sk-...\"})
+  
+  ;; Mistral embeddings
+  (embedding :mistral \"mistral-embed\"
+             {:input \"Hello world\"}
+             {:api-key \"...\"})
+  
+  ;; Gemini embeddings
+  (embedding :gemini \"text-embedding-004\"
+             {:input \"Hello world\"}
+             {:api-key \"...\"})
+  ```
+  
+  **See also:** [[openai-embedding]], [[mistral-embedding]], [[gemini-embedding]]"
+  ([provider-name model request-map]
+   (embedding provider-name model request-map {}))
+  
+  ([provider-name model request-map config]
+   ;; Validate provider exists
+   (when-not (provider-available? provider-name)
+     (throw (errors/provider-not-found 
+              (name provider-name)
+              :available-providers (list-providers))))
+   
+   ;; Build full request with model
+   (let [request (assoc request-map :model model)]
+     
+     ;; Validate embedding request
+     (providers/validate-embedding-request provider-name request)
+     
+     ;; Merge API key and other request params into config
+     (let [merged-config (merge config (select-keys request [:api-key :api-base :timeout]))
+           transformed-request (providers/transform-embedding-request provider-name request merged-config)
+           response-future (providers/make-embedding-request provider-name transformed-request nil nil merged-config)
+           response @response-future]  ; Block and wait for response
+       ;; Transform response
+       (providers/transform-embedding-response provider-name response)))))
+
+;; ============================================================================
 ;; Provider-Specific Convenience Functions
 ;; ============================================================================
 
@@ -171,6 +236,21 @@
   "Direct OpenRouter completion"
   [model request-map & {:as config}]
   (completion :openrouter model request-map config))
+
+(defn openai-embedding
+  "Direct OpenAI embedding"
+  [model request-map & {:as config}]
+  (embedding :openai model request-map config))
+
+(defn mistral-embedding
+  "Direct Mistral embedding"
+  [model request-map & {:as config}]
+  (embedding :mistral model request-map config))
+
+(defn gemini-embedding
+  "Direct Gemini embedding"
+  [model request-map & {:as config}]
+  (embedding :gemini model request-map config))
 
 ;; ============================================================================
 ;; Provider Validation

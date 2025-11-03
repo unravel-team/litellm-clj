@@ -264,6 +264,72 @@
 (defmethod get-cost-per-token :openrouter [provider-name model]
   (openrouter/get-cost-per-token-impl provider-name model))
 
+;; transform-embedding-request
+;; ----------------------------------------------------------------------------
+
+(defmulti transform-embedding-request
+  "Transform a standard embedding request to provider-specific format"
+  (fn [provider-name request config] provider-name))
+
+(defmethod transform-embedding-request :openai [provider-name request config]
+  (openai/transform-embedding-request-impl provider-name request config))
+
+(defmethod transform-embedding-request :mistral [provider-name request config]
+  (mistral/transform-embedding-request-impl provider-name request config))
+
+(defmethod transform-embedding-request :gemini [provider-name request config]
+  (gemini/transform-embedding-request-impl provider-name request config))
+
+;; make-embedding-request
+;; ----------------------------------------------------------------------------
+
+(defmulti make-embedding-request
+  "Make HTTP request to provider embedding API, returns a future"
+  (fn [provider-name transformed-request thread-pool telemetry config] provider-name))
+
+(defmethod make-embedding-request :openai [provider-name transformed-request thread-pool telemetry config]
+  (openai/make-embedding-request-impl provider-name transformed-request thread-pool telemetry config))
+
+(defmethod make-embedding-request :mistral [provider-name transformed-request thread-pool telemetry config]
+  (mistral/make-embedding-request-impl provider-name transformed-request thread-pool telemetry config))
+
+(defmethod make-embedding-request :gemini [provider-name transformed-request thread-pool telemetry config]
+  (gemini/make-embedding-request-impl provider-name transformed-request thread-pool telemetry config))
+
+;; transform-embedding-response
+;; ----------------------------------------------------------------------------
+
+(defmulti transform-embedding-response
+  "Transform provider embedding response to standard format"
+  (fn [provider-name response] provider-name))
+
+(defmethod transform-embedding-response :openai [provider-name response]
+  (openai/transform-embedding-response-impl provider-name response))
+
+(defmethod transform-embedding-response :mistral [provider-name response]
+  (mistral/transform-embedding-response-impl provider-name response))
+
+(defmethod transform-embedding-response :gemini [provider-name response]
+  (gemini/transform-embedding-response-impl provider-name response))
+
+;; supports-embeddings?
+;; ----------------------------------------------------------------------------
+
+(defmulti supports-embeddings?
+  "Check if provider supports embeddings"
+  identity)
+
+(defmethod supports-embeddings? :default [_] false)
+
+(defmethod supports-embeddings? :openai [provider-name]
+  (openai/supports-embeddings-impl provider-name))
+
+(defmethod supports-embeddings? :mistral [provider-name]
+  (mistral/supports-embeddings-impl provider-name))
+
+(defmethod supports-embeddings? :gemini [provider-name]
+  (gemini/supports-embeddings-impl provider-name))
+
 ;; ============================================================================
 ;; Provider Validation
 ;; ============================================================================
@@ -289,6 +355,21 @@
              "Invalid request format"
              :request request
              :errors (schemas/explain-request request)))))
+
+(defn validate-embedding-request
+  "Validate embedding request against provider capabilities"
+  [provider-name request]
+  (when-not (supports-embeddings? provider-name)
+    (throw (errors/unsupported-feature
+             (name provider-name)
+             :embeddings
+             :message "Provider doesn't support embeddings")))
+  
+  (when-not (schemas/valid-embedding-request? request)
+    (throw (errors/invalid-request
+             "Invalid embedding request format"
+             :request request
+             :errors (schemas/explain-embedding-request request)))))
 
 ;; ============================================================================
 ;; Model String Parsing
