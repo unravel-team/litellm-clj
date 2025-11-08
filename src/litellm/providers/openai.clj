@@ -156,18 +156,18 @@
   "OpenAI-specific transform-request implementation"
   [provider-name request config]
   (let [model (:model request)
-        transformed {:model model
-                    :messages (transform-messages (:messages request))
-                    :max_tokens (:max-tokens request)
-                    :temperature (:temperature request)
-                    :top_p (:top-p request)
-                    :frequency_penalty (:frequency-penalty request)
-                    :presence_penalty (:presence-penalty request)
-                    :stop (:stop request)
-                    :stream (:stream request false)}]
+        base {:model model
+              :messages (transform-messages (:messages request))}]
     
-    ;; Add function calling if present
-    (cond-> transformed
+    ;; Add optional parameters only if they are not nil
+    (cond-> base
+      (:max-tokens request) (assoc :max_completion_tokens (:max-tokens request))
+      (:temperature request) (assoc :temperature (:temperature request))
+      (:top-p request) (assoc :top_p (:top-p request))
+      (:frequency-penalty request) (assoc :frequency_penalty (:frequency-penalty request))
+      (:presence-penalty request) (assoc :presence_penalty (:presence-penalty request))
+      (:stop request) (assoc :stop (:stop request))
+      (contains? request :stream) (assoc :stream (:stream request))
       (:tools request) (assoc :tools (transform-tools (:tools request)))
       (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request)))
       (:functions request) (assoc :functions (transform-functions (:functions request)))
