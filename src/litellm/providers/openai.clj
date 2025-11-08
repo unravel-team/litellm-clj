@@ -131,6 +131,9 @@
    "gpt-4-turbo" {:input 0.00001 :output 0.00003}
    "gpt-4o" {:input 0.000005 :output 0.000015}
    "gpt-4o-mini" {:input 0.00000015 :output 0.0000006}
+   "gpt-5-mini" {:input 0.00000025 :output 0.000002}
+   "gpt-5-nano" {:input 0.00000005 :output 0.0000004}
+   "gpt-5-pro" {:input 0.00000125 :output 0.00001}
    "gpt-3.5-turbo" {:input 0.0000005 :output 0.0000015}
    "gpt-3.5-turbo-instruct" {:input 0.0000015 :output 0.000002}})
 
@@ -140,6 +143,9 @@
    "gpt-4-turbo" "gpt-4-turbo-preview"
    "gpt-4o" "gpt-4o"
    "gpt-4o-mini" "gpt-4o-mini"
+   "gpt-5-mini" "gpt-5-mini"
+   "gpt-5-nano" "gpt-5-nano"
+   "gpt-5-pro" "gpt-5-pro"
    "gpt-3.5-turbo" "gpt-3.5-turbo"})
 
 ;; ============================================================================

@@ -58,6 +58,38 @@
       (is (contains? cost :input))
       (is (contains? cost :output)))))
 
+(deftest test-get-cost-per-token-gpt5-mini
+  (testing "Get cost for GPT-5 mini"
+    (let [cost (openai/get-cost-per-token-impl :openai "gpt-5-mini")]
+      (is (some? cost))
+      (is (= 0.00000025 (:input cost)))
+      (is (= 0.000002 (:output cost))))))
+
+(deftest test-get-cost-per-token-gpt5-nano
+  (testing "Get cost for GPT-5 nano"
+    (let [cost (openai/get-cost-per-token-impl :openai "gpt-5-nano")]
+      (is (some? cost))
+      (is (= 0.00000005 (:input cost)))
+      (is (= 0.0000004 (:output cost))))))
+
+(deftest test-get-cost-per-token-gpt5-pro
+  (testing "Get cost for GPT-5 pro"
+    (let [cost (openai/get-cost-per-token-impl :openai "gpt-5-pro")]
+      (is (some? cost))
+      (is (= 0.00000125 (:input cost)))
+      (is (= 0.00001 (:output cost))))))
+
+(deftest test-transform-request-gpt5-mini
+  (testing "Transform request with GPT-5 mini model"
+    (let [request {:model "gpt-5-mini"
+                  :messages [{:role :user :content "Hello"}]
+                  :max-tokens 100}
+          config {}
+          transformed (openai/transform-request-impl :openai request config)]
+      (is (= "gpt-5-mini" (:model transformed)))
+      (is (= 100 (:max_tokens transformed)))
+      (is (= 1 (count (:messages transformed)))))))
+
 (deftest test-supports-streaming
   (testing "OpenAI supports streaming"
     (is (true? (openai/supports-streaming-impl :openai)))))
