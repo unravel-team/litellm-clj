@@ -71,8 +71,9 @@
                   "claude-3-7-sonnet-20250219"
                   {:messages [{:role :user 
                               :content "Solve this problem step by step: If a train travels 120 km in 2 hours, what is its average speed?"}]
+                   :max-tokens 3000
                    :thinking {:type :enabled
-                             :budget-tokens 2048}}
+                              :budget-tokens 2048}}
                   {:api-key (System/getenv "ANTHROPIC_API_KEY")})]
     
     (println "Response:")
@@ -112,6 +113,7 @@
                    {:messages [{:role :user 
                                :content "What's the weather in Paris?"}]
                     :tools tools
+                    :max-tokens 6000
                     :reasoning-effort :medium}
                    {:api-key (System/getenv "ANTHROPIC_API_KEY")})]
     
@@ -128,18 +130,21 @@
               tool-name (get-in tool-call [:function :name])
               tool-args (json/parse-string (get-in tool-call [:function :arguments]) :key-fn keyword)
               tool-result (get-weather (:location tool-args))
+              thinking-blocks (get-in response1 [:choices 0 :message :thinking-blocks])
               
               response2 (litellm/completion
                          :anthropic
                          "claude-3-7-sonnet-20250219"
                          {:messages [{:role :user 
                                      :content "What's the weather in Paris?"}
-                                    {:role :assistant
-                                     :content (get-in response1 [:choices 0 :message :content])
-                                     :tool-calls tool-calls}
+                                    (cond-> {:role :assistant
+                                            :content (get-in response1 [:choices 0 :message :content])
+                                            :tool-calls tool-calls}
+                                      thinking-blocks (assoc :thinking-blocks thinking-blocks))
                                     {:role :tool
                                      :tool-call-id (:id tool-call)
                                      :content tool-result}]
+                          :max-tokens 6000
                           :reasoning-effort :medium}
                          {:api-key (System/getenv "ANTHROPIC_API_KEY")})]
           
