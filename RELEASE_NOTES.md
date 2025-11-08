@@ -1,22 +1,64 @@
-# Release Notes - LiteLLM Clojure v0.2.0
+# v0.3.0-alpha.1
+- Add support for Reasoning tokens
+- Add support for Embeddings API
+- Add support for GPT-5* models
+- Updated version references in README.md and build.clj
+- Minor documentation corrections
 
-**Release Date:** May 10, 2025
+This is a patch release on top of v0.3.0-alpha with version consistency fixes.
+---
 
-## 🎉 New Release - Google Gemini Support!
+# v0.3.0-alpha
 
-We're excited to announce v0.2.0 of LiteLLM Clojure, featuring full integration with Google Gemini models!
+### 🔧 Function/Tool Calling Support
+- **Anthropic Function Calling** - Full tool calling support for Claude models
+  - Tool definitions and tool choice configuration
+  - Tool result handling
+  - E2E tests for function calling
+- **OpenRouter Tool Support** - Enhanced tool transformation for multiple schema formats
+- **Improved Tool Schema Validation** - Better error handling and validation
 
-## 🆕 What's New in v0.2.0
+### 🏗️ Architecture Improvements
+- **Router System Refactor** - Replaced registry pattern with cleaner router-based architecture
+  - Simplified API surface
+  - Better resource management
+  - Improved code organization
+- **Removed Claypoole Dependency** - Switched to simpler threadpool management
+  - Reduced dependencies
+  - More straightforward concurrency model
+  - Better error handling
 
-### Google Gemini Integration
-- **Full Gemini Support** - Native integration with Google's Gemini models
-  - Gemini Pro, Gemini Pro Vision, Gemini Ultra
-  - Streaming responses
-  - Vision/multimodal capabilities
-  - Safety settings configuration
-  - Advanced generation parameters (temperature, top-k, top-p)
+### 🌐 Enhanced Provider Support
+- **OpenRouter Streaming** - Full streaming support for OpenRouter provider
+  - Registered streaming multimethods
+  - Support for multiple response formats
+- **Gemini Streaming** - Added streaming support for Google Gemini models
+- **Better Error Types** - Introduced structured error types for better debugging
 
-## 🚀 Key Features
+### 📚 Documentation & Examples
+- Comprehensive documentation updates across all API guides
+- Fixed and improved examples:
+  - Tool calling examples with correct API patterns
+  - Error handling examples
+  - Provider-specific examples
+- Updated README with function calling support information
+- Removed outdated migration guides and documents
+
+### 🧪 Testing Improvements
+- Enhanced E2E test suite with function calling tests
+- Added `supports-streaming` flag for better test organization
+- Force tool usage in tests with `:tool-choice :required`
+- Improved error logging in tests
+
+### 🔨 Bug Fixes & Refinements
+- Fixed message schema to allow tool calls
+- Fixed OpenRouter tool transformation to handle both schema formats
+- Fixed `transform-tool-calls` to return proper vector format
+- Corrected docstring syntax errors
+- Fixed linting warnings throughout codebase
+- Improved provider requires in core.clj
+
+## 🚀 Key Features (Cumulative)
 
 ### Unified LLM API
 - Single, consistent API across multiple LLM providers
@@ -25,22 +67,24 @@ We're excited to announce v0.2.0 of LiteLLM Clojure, featuring full integration 
 
 ### Provider Support
 - **OpenAI** - GPT-3.5-Turbo, GPT-4, GPT-4o with function calling
-- **Anthropic** - Claude 3 (Opus, Sonnet, Haiku), Claude 2.x
-- **Google Gemini** - Gemini Pro, Gemini Pro Vision, Gemini Ultra 🆕
-- **OpenRouter** - Access to 100+ models through a single API
+- **Anthropic** - Claude 3 (Opus, Sonnet, Haiku), Claude 2.x with tool calling 🆕
+- **Google Gemini** - Gemini Pro, Gemini Pro Vision, Gemini Ultra with streaming 🆕
+- **OpenRouter** - Access to 100+ models with streaming support 🆕
 - **Ollama** - Run models locally
+- **Mistral** - Mistral models support
 
 ### Enterprise Features
-- **Thread Pool Management** - Efficient resource utilization with Claypoole
+- **Router-Based Architecture** - Clean, maintainable code structure 🆕
 - **Async Operations** - Non-blocking API calls with core.async
 - **Health Monitoring** - Built-in system health checks
 - **Cost Tracking** - Token counting and cost estimation
 - **Schema Validation** - Request/response validation with Malli
-- **Caching Support** - Built-in response caching capabilities
+- **Structured Error Types** - Better error handling and debugging 🆕
 
 ### Streaming & Function Calling
 - Stream responses for better user experience
 - OpenAI-style function calling support
+- Anthropic tool calling support 🆕
 - Async streaming with callback handlers
 
 ## 📦 Installation
@@ -48,59 +92,93 @@ We're excited to announce v0.2.0 of LiteLLM Clojure, featuring full integration 
 Add to your `deps.edn`:
 
 ```clojure
-{:deps {tech.unravel/litellm-clj {:mvn/version "0.2.0"}}}
+{:deps {tech.unravel/litellm-clj {:mvn/version "0.3.0-alpha.1"}}}
 ```
 
 Or with Leiningen:
 
 ```clojure
-[tech.unravel/litellm-clj "0.2.0"]
+[tech.unravel/litellm-clj "0.3.0-alpha.1"]
 ```
 
 ## 🔧 Quick Start
 
 ```clojure
 (require '[litellm.core :as litellm])
+(require '[litellm.router :as router])
 
-;; Create a system
-(def system (litellm/create-system 
-              {:providers {"openai" {:provider :openai
-                                     :api-key "your-key"}}}))
+;; Create a router
+(def llm-router (router/create-router 
+                  {:providers {:openai {:api-key "your-key"}
+                              :anthropic {:api-key "your-key"}}}))
 
 ;; Make a request
-(def response (litellm/make-request system
+(def response (router/chat llm-router
                 {:model "gpt-3.5-turbo"
                  :messages [{:role "user" 
                             :content "Hello!"}]}))
 
-;; Cleanup
-(litellm/shutdown-system! system)
+;; With function calling (Anthropic)
+(def response (router/chat llm-router
+                {:model "claude-3-sonnet-20240229"
+                 :messages [{:role "user" :content "What's the weather?"}]
+                 :tools [{:type "function"
+                          :function {:name "get_weather"
+                                   :description "Get weather"
+                                   :parameters {:type "object"
+                                              :properties {:location {:type "string"}}}}}]
+                 :tool-choice :auto}))
 ```
 
-## 📚 Documentation
+## � Documentation
 
 - Comprehensive README with examples
 - Provider-specific configuration guides
 - API reference documentation
+- Router API guide
+- Function calling examples
 - Quick start tutorials
+
+## ⚠️ Breaking Changes
+
+### Router System Refactor
+The system/registry pattern has been replaced with a router-based architecture:
+
+**Old Pattern (v0.2.0):**
+```clojure
+(def system (litellm/create-system {:providers {...}}))
+(litellm/make-request system {...})
+(litellm/shutdown-system! system)
+```
+
+**New Pattern (v0.3.0-alpha):**
+```clojure
+(def router (router/create-router {:providers {...}}))
+(router/chat router {...})
+;; No shutdown needed - cleaner resource management
+```
+
+### Removed Claypoole Dependency
+If you were directly using threadpool features, you'll need to adapt to the new simplified concurrency model.
 
 ## 🐛 Known Issues
 
-This is an initial release with some known limitations:
+This is an alpha release with some known limitations:
 
-1. Test suite needs refinement for edge cases
-2. Some advanced streaming features are partial
-3. Integration tests require API keys
-4. Provider name extraction needs improvement for some edge cases
+1. Function calling support is currently available for Anthropic and OpenRouter
+2. Some edge cases in tool schema validation may need refinement
+3. Integration tests require API keys for all providers
+4. Streaming support varies by provider
 
-These will be addressed in upcoming releases.
+These will be addressed in the beta and stable releases.
 
-## 🔜 What's Next (v0.3.0 planned)
+## 🔜 What's Next (v0.3.0 stable planned)
 
+- Function calling support for all providers
 - Azure OpenAI support
 - Cohere integration
-- Enhanced streaming API
-- Improved error handling
+- Enhanced streaming API consistency
+- Improved error messages
 - Better test coverage
 - Performance optimizations
 - Batch request support
@@ -125,29 +203,107 @@ MIT License - see LICENSE file for details.
 ```
 GroupId: tech.unravel
 ArtifactId: litellm-clj  
-Version: 0.2.0
+Version: 0.3.0-alpha.1
 ```
 
 **Clojars:** https://clojars.org/tech.unravel/litellm-clj
 
-## 📝 Upgrade Notes from v0.1.0
+## 📝 Upgrade Notes from v0.2.0
 
-This is a minor version release with no breaking changes. Simply update the version number in your `deps.edn`:
+⚠️ **This is an alpha release with breaking changes.**
+
+### Migration Guide
+
+1. **Update Dependencies:**
+   ```clojure
+   {:deps {tech.unravel/litellm-clj {:mvn/version "0.3.0-alpha.1"}}}
+   ```
+
+2. **Update Imports:**
+   ```clojure
+   ;; Add router namespace
+   (require '[litellm.router :as router])
+   ```
+
+3. **Migrate to Router Pattern:**
+   ```clojure
+   ;; Old:
+   (def system (litellm/create-system {:providers {...}}))
+   
+   ;; New:
+   (def router (router/create-router {:providers {...}}))
+   ```
+
+4. **Update API Calls:**
+   ```clojure
+   ;; Old:
+   (litellm/make-request system {...})
+   
+   ;; New:
+   (router/chat router {...})
+   ```
+
+5. **Remove Shutdown Calls:**
+   ```clojure
+   ;; Old:
+   (litellm/shutdown-system! system)
+   
+   ;; New: Not needed with router pattern
+   ```
+
+### New Function Calling Example (Anthropic)
 
 ```clojure
-{:deps {tech.unravel/litellm-clj {:mvn/version "0.2.0"}}}
+(require '[litellm.router :as router])
+
+;; Create router with Anthropic
+(def router (router/create-router 
+              {:providers {:anthropic {:api-key (System/getenv "ANTHROPIC_API_KEY")}}}))
+
+;; Define tools
+(def tools
+  [{:type "function"
+    :function {:name "get_weather"
+               :description "Get current weather for a location"
+               :parameters {:type "object"
+                          :properties {:location {:type "string"
+                                                 :description "City name"}}
+                          :required ["location"]}}}])
+
+;; Make request with tools
+(def response 
+  (router/chat router
+    {:model "claude-3-sonnet-20240229"
+     :messages [{:role "user" :content "What's the weather in San Francisco?"}]
+     :tools tools
+     :tool-choice :auto}))
 ```
 
-### New Gemini Usage Example
+---
 
-```clojure
-;; Configure Gemini
-(def system (litellm/create-system 
-              {:providers {"gemini" {:provider :gemini
-                                     :api-key (System/getenv "GEMINI_API_KEY")}}}))
+# Previous Releases
 
-;; Make a request
-(litellm/make-request system
-  {:model "gemini-pro"
-   :messages [{:role "user" :content "Explain quantum computing"}]})
-```
+## Release Notes - LiteLLM Clojure v0.2.0
+
+**Release Date:** May 10, 2025
+
+### 🎉 New Release - Google Gemini Support!
+
+We're excited to announce v0.2.0 of LiteLLM Clojure, featuring full integration with Google Gemini models!
+
+### 🆕 What's New in v0.2.0
+
+#### Google Gemini Integration
+- **Full Gemini Support** - Native integration with Google's Gemini models
+  - Gemini Pro, Gemini Pro Vision, Gemini Ultra
+  - Streaming responses
+  - Vision/multimodal capabilities
+  - Safety settings configuration
+  - Advanced generation parameters (temperature, top-k, top-p)
+
+### Provider Support
+- **OpenAI** - GPT-3.5-Turbo, GPT-4, GPT-4o with function calling
+- **Anthropic** - Claude 3 (Opus, Sonnet, Haiku), Claude 2.x
+- **Google Gemini** - Gemini Pro, Gemini Pro Vision, Gemini Ultra 🆕
+- **OpenRouter** - Access to 100+ models through a single API
+- **Ollama** - Run models locally

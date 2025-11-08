@@ -44,6 +44,9 @@ build:
 install:
 	clojure -T:build install
 
+deploy:
+	clojure -T:build deploy
+
 # Streaming-specific targets
 test-streaming:
 	clojure -M test_streaming_manual.clj
