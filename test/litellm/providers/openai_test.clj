@@ -48,7 +48,7 @@
           config {}
           transformed (openai/transform-request-impl :openai request config)]
       (is (= "gpt-4" (:model transformed)))
-      (is (= 100 (:max_tokens transformed)))
+      (is (= 100 (:max_completion_tokens transformed)))
       (is (= 1 (count (:messages transformed)))))))
 
 (deftest test-get-cost-per-token
@@ -87,7 +87,7 @@
           config {}
           transformed (openai/transform-request-impl :openai request config)]
       (is (= "gpt-5-mini" (:model transformed)))
-      (is (= 100 (:max_tokens transformed)))
+      (is (= 100 (:max_completion_tokens transformed)))
       (is (= 1 (count (:messages transformed)))))))
 
 (deftest test-supports-streaming
