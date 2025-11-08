@@ -17,7 +17,6 @@
                                  :content "What is the capital of India?"}]
                      :api-key (System/getenv "OPENAI_API_KEY")
                      :max-tokens 100
-                     :temperature 0.7}
             
             response (litellm/completion :openai "gpt-4o-mini"
                                  request)]
