@@ -131,6 +131,9 @@
    "gpt-4-turbo" {:input 0.00001 :output 0.00003}
    "gpt-4o" {:input 0.000005 :output 0.000015}
    "gpt-4o-mini" {:input 0.00000015 :output 0.0000006}
+   "gpt-5-mini" {:input 0.00000025 :output 0.000002}
+   "gpt-5-nano" {:input 0.00000005 :output 0.0000004}
+   "gpt-5-pro" {:input 0.00000125 :output 0.00001}
    "gpt-3.5-turbo" {:input 0.0000005 :output 0.0000015}
    "gpt-3.5-turbo-instruct" {:input 0.0000015 :output 0.000002}})
 
@@ -140,6 +143,9 @@
    "gpt-4-turbo" "gpt-4-turbo-preview"
    "gpt-4o" "gpt-4o"
    "gpt-4o-mini" "gpt-4o-mini"
+   "gpt-5-mini" "gpt-5-mini"
+   "gpt-5-nano" "gpt-5-nano"
+   "gpt-5-pro" "gpt-5-pro"
    "gpt-3.5-turbo" "gpt-3.5-turbo"})
 
 ;; ============================================================================
@@ -150,18 +156,18 @@
   "OpenAI-specific transform-request implementation"
   [provider-name request config]
   (let [model (:model request)
-        transformed {:model model
-                    :messages (transform-messages (:messages request))
-                    :max_tokens (:max-tokens request)
-                    :temperature (:temperature request)
-                    :top_p (:top-p request)
-                    :frequency_penalty (:frequency-penalty request)
-                    :presence_penalty (:presence-penalty request)
-                    :stop (:stop request)
-                    :stream (:stream request false)}]
+        base {:model model
+              :messages (transform-messages (:messages request))}]
     
-    ;; Add function calling if present
-    (cond-> transformed
+    ;; Add optional parameters only if they are not nil
+    (cond-> base
+      (:max-tokens request) (assoc :max_completion_tokens (:max-tokens request))
+      (:temperature request) (assoc :temperature (:temperature request))
+      (:top-p request) (assoc :top_p (:top-p request))
+      (:frequency-penalty request) (assoc :frequency_penalty (:frequency-penalty request))
+      (:presence-penalty request) (assoc :presence_penalty (:presence-penalty request))
+      (:stop request) (assoc :stop (:stop request))
+      (contains? request :stream) (assoc :stream (:stream request))
       (:tools request) (assoc :tools (transform-tools (:tools request)))
       (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request)))
       (:functions request) (assoc :functions (transform-functions (:functions request)))
