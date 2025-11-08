@@ -43,8 +43,8 @@ LiteLLM Clojure provides a unified, idiomatic Clojure interface for interacting 
 
 | Provider     | Status       | Models                                     | Function Calling | Streaming |
 |--------------|--------------|--------------------------------------------|------------------|-----------|
-| OpenAI       | ✅ Supported | GPT-3.5-Turbo, GPT-4, GPT-4o               | ✅               | ✅        |
-| Anthropic    | ✅ Supported | Claude 3 (Opus, Sonnet, Haiku), Claude 2.x | ✅               | ✅        |
+| OpenAI       | ✅ Supported | GPT-5, GPT-5 mini, GPT-5 nano, GPT-5 pro, GPT-4.1, GPT-4o, GPT-4, GPT-3.5-Turbo | ✅               | ✅        |
+| Anthropic    | ✅ Supported | Claude 4.5 (Sonnet, Haiku), Claude 4.1 (Opus), Claude 3.x, Claude 2.x | ✅               | ✅        |
 | OpenRouter   | ✅ Supported | All OpenRouter models                      | ✅               | ✅        |
 | Google Gemini| ✅ Supported | Gemini Pro, Gemini Pro Vision, Gemini Ultra| ❌               | ✅        |
 | Mistral      | ✅ Supported | Mistral Small/Medium/Large, Codestral, Magistral | ✅               | ✅        |
