@@ -301,6 +301,71 @@
     output-ch))
 
 ;; ============================================================================
+;; Embedding Support
+;; ============================================================================
+
+(def default-embedding-cost-map
+  "Cost per token for OpenAI embedding models (in USD)"
+  {"text-embedding-3-small" {:input 0.00000002 :output 0.0}
+   "text-embedding-3-large" {:input 0.00000013 :output 0.0}
+   "text-embedding-ada-002" {:input 0.0000001 :output 0.0}})
+
+(defn transform-embedding-request-impl
+  "OpenAI-specific transform-embedding-request implementation"
+  [provider-name request config]
+  (let [model (:model request)
+        input (:input request)
+        transformed {:model model
+                    :input (if (string? input) [input] input)}]
+    (cond-> transformed
+      (:encoding-format request) (assoc :encoding_format (name (:encoding-format request)))
+      (:dimensions request) (assoc :dimensions (:dimensions request))
+      (:user request) (assoc :user (:user request)))))
+
+(defn make-embedding-request-impl
+  "OpenAI-specific make-embedding-request implementation"
+  [provider-name transformed-request thread-pool telemetry config]
+  (let [url (str (:api-base config "https://api.openai.com/v1") "/embeddings")]
+    (errors/wrap-http-errors
+      "openai"
+      #(let [start-time (System/currentTimeMillis)
+             response (http/post url
+                                 (conj {:headers {"Authorization" (str "Bearer " (:api-key config))
+                                                  "Content-Type" "application/json"
+                                                  "User-Agent" "litellm-clj/1.0.0"}
+                                        :body (json/encode transformed-request)
+                                        :timeout (:timeout config 30000)
+                                        :async? true
+                                        :as :json}
+                                       (when thread-pool
+                                         {:executor thread-pool})))
+             duration (- (System/currentTimeMillis) start-time)]
+         
+         ;; Handle errors if response has error status
+         (when (>= (:status @response) 400)
+           (handle-error-response :openai @response))
+
+         response))))
+
+(defn transform-embedding-response-impl
+  "OpenAI-specific transform-embedding-response implementation"
+  [provider-name response]
+  (let [body (:body response)]
+    {:object (:object body)
+     :data (map (fn [item]
+                  {:object (:object item)
+                   :embedding (:embedding item)
+                   :index (:index item)})
+                (:data body))
+     :model (:model body)
+     :usage (transform-usage (:usage body))}))
+
+(defn supports-embeddings-impl
+  "OpenAI-specific supports-embeddings? implementation"
+  [provider-name]
+  true)
+
+;; ============================================================================
 ;; Utility Functions
 ;; ============================================================================
 

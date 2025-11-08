@@ -79,3 +79,83 @@
                    :headers {"retry-after" "60"}}]
       (is (thrown-with-msg? Exception #"Rate limit exceeded"
                             (openai/handle-error-response :openai response))))))
+
+;; ============================================================================
+;; Embedding Tests
+;; ============================================================================
+
+(deftest test-transform-embedding-request-single-input
+  (testing "Transform embedding request with single string input"
+    (let [request {:model "text-embedding-3-small"
+                  :input "Hello world"}
+          config {}
+          transformed (openai/transform-embedding-request-impl :openai request config)]
+      (is (= "text-embedding-3-small" (:model transformed)))
+      (is (vector? (:input transformed)))
+      (is (= 1 (count (:input transformed))))
+      (is (= "Hello world" (first (:input transformed)))))))
+
+(deftest test-transform-embedding-request-array-input
+  (testing "Transform embedding request with array input"
+    (let [request {:model "text-embedding-3-small"
+                  :input ["Hello" "World"]}
+          config {}
+          transformed (openai/transform-embedding-request-impl :openai request config)]
+      (is (= "text-embedding-3-small" (:model transformed)))
+      (is (vector? (:input transformed)))
+      (is (= 2 (count (:input transformed))))
+      (is (= "Hello" (first (:input transformed))))
+      (is (= "World" (second (:input transformed)))))))
+
+(deftest test-transform-embedding-request-with-optional-fields
+  (testing "Transform embedding request with optional fields"
+    (let [request {:model "text-embedding-3-small"
+                  :input "Hello world"
+                  :encoding-format :float
+                  :dimensions 1536
+                  :user "test-user"}
+          config {}
+          transformed (openai/transform-embedding-request-impl :openai request config)]
+      (is (= "text-embedding-3-small" (:model transformed)))
+      (is (= "float" (:encoding_format transformed)))
+      (is (= 1536 (:dimensions transformed)))
+      (is (= "test-user" (:user transformed))))))
+
+(deftest test-transform-embedding-response
+  (testing "Transform embedding response from OpenAI format"
+    (let [response {:body {:object "list"
+                          :data [{:object "embedding"
+                                 :embedding [0.1 0.2 0.3]
+                                 :index 0}
+                                {:object "embedding"
+                                 :embedding [0.4 0.5 0.6]
+                                 :index 1}]
+                          :model "text-embedding-3-small"
+                          :usage {:prompt_tokens 10
+                                 :completion_tokens 0
+                                 :total_tokens 10}}}
+          transformed (openai/transform-embedding-response-impl :openai response)]
+      (is (= "list" (:object transformed)))
+      (is (= "text-embedding-3-small" (:model transformed)))
+      (is (= 2 (count (:data transformed))))
+      (is (= [0.1 0.2 0.3] (:embedding (first (:data transformed)))))
+      (is (= [0.4 0.5 0.6] (:embedding (second (:data transformed)))))
+      (is (= 10 (get-in transformed [:usage :prompt-tokens])))
+      (is (= 0 (get-in transformed [:usage :completion-tokens]))))))
+
+(deftest test-supports-embeddings
+  (testing "OpenAI supports embeddings"
+    (is (true? (openai/supports-embeddings-impl :openai)))))
+
+(deftest test-embedding-cost-map
+  (testing "Embedding cost map contains known models"
+    (is (contains? openai/default-embedding-cost-map "text-embedding-3-small"))
+    (is (contains? openai/default-embedding-cost-map "text-embedding-3-large"))
+    (is (contains? openai/default-embedding-cost-map "text-embedding-ada-002"))
+    
+    (testing "Costs have correct structure"
+      (let [cost (get openai/default-embedding-cost-map "text-embedding-3-small")]
+        (is (contains? cost :input))
+        (is (contains? cost :output))
+        (is (number? (:input cost)))
+        (is (zero? (:output cost)))))))

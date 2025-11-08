@@ -221,6 +221,48 @@
                            :api-key nil)))))
 
 ;; ============================================================================
+;; Embedding API Tests
+;; ============================================================================
+
+(deftest test-embedding-provider-not-found
+  (testing "Embedding throws error for unknown provider"
+    (is (thrown-with-msg? Exception #"Provider not found"
+                          (core/embedding :nonexistent "model" 
+                                         {:input "test"})))))
+
+(deftest test-embedding-invalid-request
+  (testing "Embedding throws error for invalid request"
+    (is (thrown? Exception
+                 (core/embedding :openai "text-embedding-3-small" {})))))
+
+(deftest test-embedding-unsupported-provider
+  (testing "Embedding throws error for provider without embedding support"
+    (is (thrown-with-msg? Exception #"doesn't support embeddings"
+                          (core/embedding :anthropic "claude-3-sonnet-20240229"
+                                         {:input "test"})))))
+
+(deftest test-openai-embedding
+  (testing "OpenAI embedding function exists and delegates correctly"
+    ;; Without API key, should throw an error
+    (is (thrown? Exception
+                 (core/openai-embedding "text-embedding-3-small"
+                                       {:input "test"})))))
+
+(deftest test-mistral-embedding
+  (testing "Mistral embedding function exists and delegates correctly"
+    ;; Without API key, should throw an error
+    (is (thrown? Exception
+                 (core/mistral-embedding "mistral-embed"
+                                        {:input "test"})))))
+
+(deftest test-gemini-embedding
+  (testing "Gemini embedding function exists and delegates correctly"
+    ;; Without API key, should throw an error
+    (is (thrown? Exception
+                 (core/gemini-embedding "text-embedding-004"
+                                       {:input "test"})))))
+
+;; ============================================================================
 ;; Integration Tests (require API keys)
 ;; ============================================================================
 

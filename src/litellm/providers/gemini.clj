@@ -352,6 +352,74 @@
     output-ch))
 
 ;; ============================================================================
+;; Embedding Support
+;; ============================================================================
+
+(def default-embedding-cost-map
+  "Cost per token for Gemini embedding models (in USD)"
+  {"text-embedding-004" {:input 0.00000001 :output 0.0}})
+
+(defn transform-embedding-request-impl
+  "Gemini-specific transform-embedding-request implementation"
+  [provider-name request config]
+  (let [model (:model request)
+        input (:input request)
+        requests (if (string? input)
+                   [{:model (str "models/" model)
+                     :content {:parts [{:text input}]}}]
+                   (map (fn [text]
+                          {:model (str "models/" model)
+                           :content {:parts [{:text text}]}})
+                        input))]
+    {:requests requests}))
+
+(defn make-embedding-request-impl
+  "Gemini-specific make-embedding-request implementation"
+  [provider-name transformed-request thread-pool telemetry config]
+  (let [url (str (:api-base config "https://generativelanguage.googleapis.com/v1beta") "/models:batchEmbedContents")]
+    (errors/wrap-http-errors
+      "gemini"
+      #(let [start-time (System/currentTimeMillis)
+             response (http/post url
+                                 (conj {:headers {"x-goog-api-key" (:api-key config)
+                                                  "Content-Type" "application/json"
+                                                  "User-Agent" "litellm-clj/1.0.0"}
+                                        :body (json/encode transformed-request)
+                                        :timeout (:timeout config 30000)
+                                        :async? true
+                                        :as :json}
+                                       (when thread-pool
+                                         {:executor thread-pool})))
+             duration (- (System/currentTimeMillis) start-time)]
+         
+         ;; Handle errors if response has error status
+         (when (>= (:status @response) 400)
+           (handle-error-response :gemini @response))
+         
+         response))))
+
+(defn transform-embedding-response-impl
+  "Gemini-specific transform-embedding-response implementation"
+  [provider-name response]
+  (let [body (:body response)
+        embeddings (:embeddings body)]
+    {:object "list"
+     :data (map-indexed (fn [idx emb]
+                          {:object "embedding"
+                           :embedding (:values emb)
+                           :index idx})
+                        embeddings)
+     :model (get-in body [:embeddings 0 :model] "text-embedding-004")
+     :usage {:prompt-tokens 0
+            :completion-tokens 0
+            :total-tokens 0}}))
+
+(defn supports-embeddings-impl
+  "Gemini-specific supports-embeddings? implementation"
+  [provider-name]
+  true)
+
+;; ============================================================================
 ;; Utility Functions
 ;; ============================================================================
 
