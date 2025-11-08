@@ -83,7 +83,8 @@
   (cond-> {:role (keyword (:role message))
            :content (:content message)}
     (:tool_calls message) (assoc :tool-calls (transform-tool-calls (:tool_calls message)))
-    (:function_call message) (assoc :function-call (transform-function-call-response (:function_call message)))))
+    (:function_call message) (assoc :function-call (transform-function-call-response (:function_call message)))
+    (:reasoning_content message) (assoc :reasoning-content (:reasoning_content message))))
 
 (defn transform-choice
   "Transform OpenAI choice to standard format"
@@ -171,7 +172,9 @@
       (:tools request) (assoc :tools (transform-tools (:tools request)))
       (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request)))
       (:functions request) (assoc :functions (transform-functions (:functions request)))
-      (:function-call request) (assoc :function_call (transform-function-call (:function-call request))))))
+      (:function-call request) (assoc :function_call (transform-function-call (:function-call request)))
+      ;; Add reasoning_effort for o1 models (low, medium, high)
+      (:reasoning-effort request) (assoc :reasoning_effort (name (:reasoning-effort request))))))
 
 (defn make-request-impl
   "OpenAI-specific make-request implementation"
@@ -258,8 +261,9 @@
      :created (:created chunk)
      :model (:model chunk)
      :choices [{:index (:index choice)
-               :delta {:role (keyword (:role delta))
-                      :content (:content delta)}
+               :delta (cond-> {:role (keyword (:role delta))
+                              :content (:content delta)}
+                        (:reasoning_content delta) (assoc :reasoning-content (:reasoning_content delta)))
                :finish-reason (when (:finish_reason choice)
                                (keyword (:finish_reason choice)))}]}))
 
