@@ -103,10 +103,10 @@
         message (or (:message error-info) "Unknown error")
         provider-code (:code error-info)
         request-id (get-in response [:headers "x-request-id"])]
-    
-    (throw (errors/http-status->error 
-             status 
-             "mistral" 
+
+    (throw (errors/http-status->error
+             status
+             "mistral"
              message
              :provider-code provider-code
              :request-id request-id
@@ -160,20 +160,20 @@
         messages (:messages request)
         ;; Add reasoning system prompt if applicable
         transformed-messages (if (and reasoning-effort (supports-reasoning? model))
-                              (add-reasoning-system-prompt 
+                               (add-reasoning-system-prompt
                                 (transform-messages messages)
                                 reasoning-effort)
-                              (transform-messages messages))
+                               (transform-messages messages))
         transformed {:model model
-                    :messages transformed-messages
-                    :max_tokens (:max-tokens request)
-                    :temperature (:temperature request)
-                    :top_p (:top-p request)
-                    :stop (:stop request)
-                    :stream (:stream request false)}]
-    
+                     :messages transformed-messages
+                     :max_tokens (:max-tokens request)
+                     :temperature (:temperature request)
+                     :top_p (:top-p request)
+                     :stream (:stream request false)}]
+
     ;; Add function calling if present
     (cond-> transformed
+      (:stop request) (assoc :stop (:stop request))
       (:tools request) (assoc :tools (transform-tools (:tools request)))
       (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request))))))
 
@@ -190,15 +190,16 @@
                                                   "User-Agent" "litellm-clj/1.0.0"}
                                         :body (json/encode transformed-request)
                                         :timeout (:timeout config 30000)
+                                        :async? true
                                         :as :json}
                                        (when thread-pool
                                          {:executor thread-pool})))
              duration (- (System/currentTimeMillis) start-time)]
-         
+
          ;; Handle errors if response has error status
-         (when (>= (:status response) 400)
-           (handle-error-response :mistral response))
-         
+         (when (>= (:status @response) 400)
+           (handle-error-response :mistral @response))
+
          response))))
 
 (defn transform-response-impl
@@ -317,11 +318,11 @@
                                        (when thread-pool
                                          {:executor thread-pool})))
              duration (- (System/currentTimeMillis) start-time)]
-         
+
          ;; Handle errors if response has error status
          (when (>= (:status @response) 400)
            (handle-error-response :mistral @response))
-         
+
          response))))
 
 (defn transform-embedding-response-impl
