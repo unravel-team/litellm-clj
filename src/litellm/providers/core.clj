@@ -9,7 +9,8 @@
             [litellm.providers.gemini :as gemini]
             [litellm.providers.mistral :as mistral]
             [litellm.providers.ollama :as ollama]
-            [litellm.providers.openrouter :as openrouter]))
+            [litellm.providers.openrouter :as openrouter]
+            [litellm.providers.azure :as azure]))
 
 ;; ============================================================================
 ;; Provider Multimethods and Implementations
@@ -40,6 +41,9 @@
 (defmethod transform-request :openrouter [provider-name request config]
   (openrouter/transform-request-impl provider-name request config))
 
+(defmethod transform-request :azure [provider-name request config]
+  (azure/transform-request-impl provider-name request config))
+
 ;; make-request
 ;; ----------------------------------------------------------------------------
 
@@ -65,6 +69,9 @@
 (defmethod make-request :openrouter [provider-name transformed-request thread-pool telemetry config]
   (openrouter/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
+(defmethod make-request :azure [provider-name transformed-request thread-pool telemetry config]
+  (azure/make-request-impl provider-name transformed-request thread-pool telemetry config))
+
 ;; make-streaming-request
 ;; ----------------------------------------------------------------------------
 
@@ -83,6 +90,9 @@
 
 (defmethod make-streaming-request :openrouter [provider-name transformed-request thread-pool config]
   (openrouter/make-streaming-request-impl provider-name transformed-request thread-pool config))
+
+(defmethod make-streaming-request :azure [provider-name transformed-request thread-pool config]
+  (azure/make-streaming-request-impl provider-name transformed-request thread-pool config))
 
 ;; transform-response
 ;; ----------------------------------------------------------------------------
@@ -109,6 +119,9 @@
 (defmethod transform-response :openrouter [provider-name response]
   (openrouter/transform-response-impl provider-name response))
 
+(defmethod transform-response :azure [provider-name response]
+  (azure/transform-response-impl provider-name response))
+
 ;; transform-streaming-chunk
 ;; ----------------------------------------------------------------------------
 
@@ -127,6 +140,9 @@
 
 (defmethod transform-streaming-chunk :openrouter [provider-name chunk]
   (openrouter/transform-streaming-chunk-impl provider-name chunk))
+
+(defmethod transform-streaming-chunk :azure [provider-name chunk]
+  (azure/transform-streaming-chunk-impl provider-name chunk))
 
 ;; supports-streaming?
 ;; ----------------------------------------------------------------------------
@@ -155,6 +171,9 @@
 (defmethod supports-streaming? :openrouter [provider-name]
   (openrouter/supports-streaming-impl provider-name))
 
+(defmethod supports-streaming? :azure [provider-name]
+  (azure/supports-streaming-impl provider-name))
+
 ;; supports-function-calling?
 ;; ----------------------------------------------------------------------------
 
@@ -181,6 +200,9 @@
 
 (defmethod supports-function-calling? :openrouter [provider-name]
   (openrouter/supports-function-calling-impl provider-name))
+
+(defmethod supports-function-calling? :azure [provider-name]
+  (azure/supports-function-calling-impl provider-name))
 
 ;; get-rate-limits
 ;; ----------------------------------------------------------------------------
@@ -211,6 +233,9 @@
 (defmethod get-rate-limits :openrouter [provider-name]
   (openrouter/get-rate-limits-impl provider-name))
 
+(defmethod get-rate-limits :azure [provider-name]
+  (azure/get-rate-limits-impl provider-name))
+
 ;; health-check
 ;; ----------------------------------------------------------------------------
 
@@ -235,6 +260,9 @@
 
 (defmethod health-check :openrouter [provider-name thread-pool config]
   (openrouter/health-check-impl provider-name thread-pool config))
+
+(defmethod health-check :azure [provider-name thread-pool config]
+  (azure/health-check-impl provider-name thread-pool config))
 
 ;; get-cost-per-token
 ;; ----------------------------------------------------------------------------
@@ -264,6 +292,9 @@
 (defmethod get-cost-per-token :openrouter [provider-name model]
   (openrouter/get-cost-per-token-impl provider-name model))
 
+(defmethod get-cost-per-token :azure [provider-name model]
+  (azure/get-cost-per-token-impl provider-name model))
+
 ;; transform-embedding-request
 ;; ----------------------------------------------------------------------------
 
@@ -279,6 +310,9 @@
 
 (defmethod transform-embedding-request :gemini [provider-name request config]
   (gemini/transform-embedding-request-impl provider-name request config))
+
+(defmethod transform-embedding-request :azure [provider-name request config]
+  (azure/transform-embedding-request-impl provider-name request config))
 
 ;; make-embedding-request
 ;; ----------------------------------------------------------------------------
@@ -296,6 +330,9 @@
 (defmethod make-embedding-request :gemini [provider-name transformed-request thread-pool telemetry config]
   (gemini/make-embedding-request-impl provider-name transformed-request thread-pool telemetry config))
 
+(defmethod make-embedding-request :azure [provider-name transformed-request thread-pool telemetry config]
+  (azure/make-embedding-request-impl provider-name transformed-request thread-pool telemetry config))
+
 ;; transform-embedding-response
 ;; ----------------------------------------------------------------------------
 
@@ -311,6 +348,9 @@
 
 (defmethod transform-embedding-response :gemini [provider-name response]
   (gemini/transform-embedding-response-impl provider-name response))
+
+(defmethod transform-embedding-response :azure [provider-name response]
+  (azure/transform-embedding-response-impl provider-name response))
 
 ;; supports-embeddings?
 ;; ----------------------------------------------------------------------------
@@ -329,6 +369,9 @@
 
 (defmethod supports-embeddings? :gemini [provider-name]
   (gemini/supports-embeddings-impl provider-name))
+
+(defmethod supports-embeddings? :azure [provider-name]
+  (azure/supports-embeddings-impl provider-name))
 
 ;; ============================================================================
 ;; Provider Validation
