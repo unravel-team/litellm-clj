@@ -181,33 +181,70 @@
                 :model model
                 :config {:api-key key}})))
 
+(defn setup-azure!
+  "Quick setup for Azure OpenAI with required configuration.
+
+  Required config:
+  - :api-base - Azure resource endpoint (e.g., https://my-resource.openai.azure.com)
+  - :deployment - Deployment name
+  - :api-key - Azure OpenAI API key (or AZURE_OPENAI_API_KEY env var)
+
+  Optional:
+  - :config-name - Config name to register (default: :azure)
+  - :api-version - API version (default: 2024-10-21)"
+  [& {:keys [config-name api-key api-base deployment api-version]
+      :or {config-name :azure
+           api-version "2024-10-21"}}]
+  (let [key (or api-key (System/getenv "AZURE_OPENAI_API_KEY"))
+        base (or api-base (System/getenv "AZURE_OPENAI_API_BASE"))
+        deploy (or deployment (System/getenv "AZURE_OPENAI_DEPLOYMENT"))]
+    (when-not key
+      (throw (ex-info "Azure OpenAI API key not provided and AZURE_OPENAI_API_KEY env var not set" {})))
+    (when-not base
+      (throw (ex-info "Azure OpenAI API base not provided and AZURE_OPENAI_API_BASE env var not set" {})))
+    (when-not deploy
+      (throw (ex-info "Azure OpenAI deployment not provided and AZURE_OPENAI_DEPLOYMENT env var not set" {})))
+    (register! config-name
+               {:provider :azure
+                :model deploy  ; For Azure, model is the deployment name
+                :config {:api-key key
+                         :api-base base
+                         :deployment deploy
+                         :api-version api-version}})))
+
 (defn quick-setup!
   "Quick setup for common providers using environment variables
-  
+
   Sets up:
   - :openai if OPENAI_API_KEY is set
   - :anthropic if ANTHROPIC_API_KEY is set
   - :gemini if GEMINI_API_KEY is set
   - :mistral if MISTRAL_API_KEY is set
+  - :azure if AZURE_OPENAI_API_KEY, AZURE_OPENAI_API_BASE, and AZURE_OPENAI_DEPLOYMENT are set
   - :ollama (always, defaults to localhost)"
   []
   (when (System/getenv "OPENAI_API_KEY")
     (setup-openai!))
-  
+
   (when (System/getenv "ANTHROPIC_API_KEY")
     (setup-anthropic!))
-  
+
   (when (System/getenv "GEMINI_API_KEY")
     (setup-gemini!))
-  
+
   (when (System/getenv "MISTRAL_API_KEY")
     (setup-mistral!))
-  
+
   (when (System/getenv "OPENROUTER_API_KEY")
     (setup-openrouter!))
-  
+
+  (when (and (System/getenv "AZURE_OPENAI_API_KEY")
+             (System/getenv "AZURE_OPENAI_API_BASE")
+             (System/getenv "AZURE_OPENAI_DEPLOYMENT"))
+    (setup-azure!))
+
   (setup-ollama!)
-  
+
   (log/info "Quick setup complete. Available configs:" (list-configs)))
 
 ;; ============================================================================

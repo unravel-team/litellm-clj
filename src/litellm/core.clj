@@ -9,6 +9,7 @@
             [litellm.providers.mistral]   ; Load to register provider
             [litellm.providers.ollama]    ; Load to register provider
             [litellm.providers.openrouter] ; Load to register provider
+            [litellm.providers.azure]     ; Load to register provider
             ))
 
 ;; ============================================================================
