@@ -10,7 +10,8 @@
             [litellm.providers.mistral :as mistral]
             [litellm.providers.ollama :as ollama]
             [litellm.providers.openrouter :as openrouter]
-            [litellm.providers.azure :as azure]))
+            [litellm.providers.azure :as azure]
+            [litellm.providers.bedrock :as bedrock]))
 
 ;; ============================================================================
 ;; Provider Multimethods and Implementations
@@ -44,6 +45,9 @@
 (defmethod transform-request :azure [provider-name request config]
   (azure/transform-request-impl provider-name request config))
 
+(defmethod transform-request :bedrock [provider-name request config]
+  (bedrock/transform-request-impl provider-name request config))
+
 ;; make-request
 ;; ----------------------------------------------------------------------------
 
@@ -72,6 +76,9 @@
 (defmethod make-request :azure [provider-name transformed-request thread-pool telemetry config]
   (azure/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
+(defmethod make-request :bedrock [provider-name transformed-request thread-pool telemetry config]
+  (bedrock/make-request-impl provider-name transformed-request thread-pool telemetry config))
+
 ;; make-streaming-request
 ;; ----------------------------------------------------------------------------
 
@@ -93,6 +100,9 @@
 
 (defmethod make-streaming-request :azure [provider-name transformed-request thread-pool config]
   (azure/make-streaming-request-impl provider-name transformed-request thread-pool config))
+
+(defmethod make-streaming-request :bedrock [provider-name transformed-request thread-pool config]
+  (bedrock/make-streaming-request-impl provider-name transformed-request thread-pool config))
 
 ;; transform-response
 ;; ----------------------------------------------------------------------------
@@ -122,6 +132,9 @@
 (defmethod transform-response :azure [provider-name response]
   (azure/transform-response-impl provider-name response))
 
+(defmethod transform-response :bedrock [provider-name response]
+  (bedrock/transform-response-impl provider-name response))
+
 ;; transform-streaming-chunk
 ;; ----------------------------------------------------------------------------
 
@@ -143,6 +156,9 @@
 
 (defmethod transform-streaming-chunk :azure [provider-name chunk]
   (azure/transform-streaming-chunk-impl provider-name chunk))
+
+(defmethod transform-streaming-chunk :bedrock [provider-name chunk]
+  (bedrock/transform-streaming-chunk-impl provider-name chunk))
 
 ;; supports-streaming?
 ;; ----------------------------------------------------------------------------
@@ -174,6 +190,9 @@
 (defmethod supports-streaming? :azure [provider-name]
   (azure/supports-streaming-impl provider-name))
 
+(defmethod supports-streaming? :bedrock [provider-name]
+  (bedrock/supports-streaming-impl provider-name))
+
 ;; supports-function-calling?
 ;; ----------------------------------------------------------------------------
 
@@ -203,6 +222,9 @@
 
 (defmethod supports-function-calling? :azure [provider-name]
   (azure/supports-function-calling-impl provider-name))
+
+(defmethod supports-function-calling? :bedrock [provider-name]
+  (bedrock/supports-function-calling-impl provider-name))
 
 ;; get-rate-limits
 ;; ----------------------------------------------------------------------------
@@ -236,6 +258,9 @@
 (defmethod get-rate-limits :azure [provider-name]
   (azure/get-rate-limits-impl provider-name))
 
+(defmethod get-rate-limits :bedrock [provider-name]
+  (bedrock/get-rate-limits-impl provider-name))
+
 ;; health-check
 ;; ----------------------------------------------------------------------------
 
@@ -263,6 +288,9 @@
 
 (defmethod health-check :azure [provider-name thread-pool config]
   (azure/health-check-impl provider-name thread-pool config))
+
+(defmethod health-check :bedrock [provider-name thread-pool config]
+  (bedrock/health-check-impl provider-name thread-pool config))
 
 ;; get-cost-per-token
 ;; ----------------------------------------------------------------------------
@@ -294,6 +322,9 @@
 
 (defmethod get-cost-per-token :azure [provider-name model]
   (azure/get-cost-per-token-impl provider-name model))
+
+(defmethod get-cost-per-token :bedrock [provider-name model]
+  (bedrock/get-cost-per-token-impl provider-name model))
 
 ;; transform-embedding-request
 ;; ----------------------------------------------------------------------------
@@ -381,38 +412,38 @@
   "Validate request against provider capabilities"
   [provider-name request]
   (when (and (:stream request) (not (supports-streaming? provider-name)))
-    (throw (errors/unsupported-feature 
-             (name provider-name) 
-             :streaming
-             :message "Provider doesn't support streaming")))
-  
-  (when (and (or (:tools request) (:functions request)) 
+    (throw (errors/unsupported-feature
+            (name provider-name)
+            :streaming
+            :message "Provider doesn't support streaming")))
+
+  (when (and (or (:tools request) (:functions request))
              (not (supports-function-calling? provider-name)))
-    (throw (errors/unsupported-feature 
-             (name provider-name)
-             :function-calling
-             :message "Provider doesn't support function calling")))
-  
+    (throw (errors/unsupported-feature
+            (name provider-name)
+            :function-calling
+            :message "Provider doesn't support function calling")))
+
   (when-not (schemas/valid-request? request)
     (throw (errors/invalid-request
-             "Invalid request format"
-             :request request
-             :errors (schemas/explain-request request)))))
+            "Invalid request format"
+            :request request
+            :errors (schemas/explain-request request)))))
 
 (defn validate-embedding-request
   "Validate embedding request against provider capabilities"
   [provider-name request]
   (when-not (supports-embeddings? provider-name)
     (throw (errors/unsupported-feature
-             (name provider-name)
-             :embeddings
-             :message "Provider doesn't support embeddings")))
-  
+            (name provider-name)
+            :embeddings
+            :message "Provider doesn't support embeddings")))
+
   (when-not (schemas/valid-embedding-request? request)
     (throw (errors/invalid-request
-             "Invalid embedding request format"
-             :request request
-             :errors (schemas/explain-embedding-request request)))))
+            "Invalid embedding request format"
+            :request request
+            :errors (schemas/explain-embedding-request request)))))
 
 ;; ============================================================================
 ;; Model String Parsing
@@ -472,8 +503,8 @@
     (map (fn [tool]
            {:type (:tool-type tool "function")
             :function {:name (:function-name (:function tool))
-                      :description (:function-description (:function tool))
-                      :parameters (:function-parameters (:function tool))}})
+                       :description (:function-description (:function tool))
+                       :parameters (:function-parameters (:function tool))}})
          tools)))
 
 ;; ============================================================================
@@ -522,39 +553,39 @@
   "Create a provider-specific error (DEPRECATED - use litellm.errors/provider-error)"
   [provider message & {:keys [status code data]}]
   (errors/provider-error
-    (if (keyword? provider) (name provider) (str provider))
-    message
-    :http-status status
-    :provider-code code))
+   (if (keyword? provider) (name provider) (str provider))
+   message
+   :http-status status
+   :provider-code code))
 
 (defn rate-limit-error
   "Create a rate limit error (DEPRECATED - use litellm.errors/rate-limit)"
   [provider & {:keys [retry-after]}]
   (errors/rate-limit
-    (if (keyword? provider) (name provider) (str provider))
-    "Rate limit exceeded"
-    :retry-after retry-after))
+   (if (keyword? provider) (name provider) (str provider))
+   "Rate limit exceeded"
+   :retry-after retry-after))
 
 (defn authentication-error
   "Create an authentication error (DEPRECATED - use litellm.errors/authentication-error)"
   [provider]
   (errors/authentication-error
-    (if (keyword? provider) (name provider) (str provider))
-    "Authentication failed"))
+   (if (keyword? provider) (name provider) (str provider))
+   "Authentication failed"))
 
 (defn model-not-found-error
   "Create a model not found error (DEPRECATED - use litellm.errors/model-not-found)"
   [provider model]
   (errors/model-not-found
-    (if (keyword? provider) (name provider) (str provider))
-    model))
+   (if (keyword? provider) (name provider) (str provider))
+   model))
 
 (defn quota-exceeded-error
   "Create a quota exceeded error (DEPRECATED - use litellm.errors/quota-exceeded)"
   [provider]
   (errors/quota-exceeded
-    (if (keyword? provider) (name provider) (str provider))
-    "Quota exceeded"))
+   (if (keyword? provider) (name provider) (str provider))
+   "Quota exceeded"))
 
 ;; ============================================================================
 ;; Provider Discovery
@@ -592,9 +623,9 @@
   [config]
   (when-not (schemas/valid-config? config)
     (throw (errors/invalid-config
-             "Invalid provider configuration"
-             :config config
-             :errors (schemas/explain-config config))))
+            "Invalid provider configuration"
+            :config config
+            :errors (schemas/explain-config config))))
   config)
 
 ;; ============================================================================
@@ -620,8 +651,8 @@
   [request]
   (let [message-tokens (reduce + 0 (map #(estimate-tokens (:content %)) (:messages request)))
         system-tokens (if-let [system-msg (first (filter #(= :system (:role %)) (:messages request)))]
-                       (estimate-tokens (:content system-msg))
-                       0)]
+                        (estimate-tokens (:content system-msg))
+                        0)]
     (+ message-tokens system-tokens)))
 
 (defn calculate-cost
@@ -660,8 +691,8 @@
   "Test provider with a simple request"
   [provider-name thread-pool telemetry config]
   (let [test-request {:model "test"
-                     :messages [{:role :user :content "Hello"}]
-                     :max-tokens 1}]
+                      :messages [{:role :user :content "Hello"}]
+                      :max-tokens 1}]
     (try
       (validate-request provider-name test-request)
       (let [transformed (transform-request provider-name test-request config)
@@ -686,8 +717,8 @@
   (map (fn [provider-name]
          (assoc (provider-status provider-name)
                 :health-check-available (try
-                                        (some? (health-check provider-name nil nil))
-                                        (catch Exception _ false))))
+                                          (some? (health-check provider-name nil nil))
+                                          (catch Exception _ false))))
        provider-names))
 
 (defn find-providers-for-model
