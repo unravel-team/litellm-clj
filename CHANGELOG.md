@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **AWS Amazon Bedrock Support** - Full integration with AWS Bedrock via Converse API
+  - Access to multiple AI providers through a single AWS service (Claude, Llama, Nova, Mistral)
+  - Chat completions with unified Converse API
+  - Streaming responses via ConverseStream
+  - Function calling / Tools support
+  - Model aliases for convenience (e.g., `"claude-3-haiku"` → full model ID)
+  - AWS authentication via environment variables, IAM roles, or explicit config
+  - Environment variable support: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`
+  - Cost estimation for supported models
+
 - **Azure OpenAI Support** - Full integration with Azure OpenAI Service
   - Chat completions with deployment-based routing
   - Streaming responses support

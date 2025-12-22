@@ -1,55 +1,60 @@
 {:paths ["src" "resources" "test" "examples"]
- 
+
  :deps {org.clojure/clojure {:mvn/version "1.11.1"}
-        
+
         ;; HTTP & JSON
         hato/hato {:mvn/version "0.9.0"}
         cheshire/cheshire {:mvn/version "5.12.0"}
-        
+
         ;; Logging
         ch.qos.logback/logback-classic {:mvn/version "1.4.11"}
         org.clojure/tools.logging {:mvn/version "1.2.4"}
-        
+
         ;; Async
         org.clojure/core.async {:mvn/version "1.6.681"}
-        
+
         ;; Schema validation
-        metosin/malli {:mvn/version "0.13.0"}}
- 
+        metosin/malli {:mvn/version "0.13.0"}
+
+        ;; AWS Bedrock
+        com.cognitect.aws/api {:mvn/version "0.8.692"}
+        com.cognitect.aws/endpoints {:mvn/version "1.1.12.772"}
+        com.cognitect.aws/bedrock-runtime {:mvn/version "871.2.32.2"}}
+
  :aliases
  {:dev {:extra-paths ["dev" "test"]
         :extra-deps {org.clojure/tools.namespace {:mvn/version "1.4.4"}
                      criterium/criterium {:mvn/version "0.4.6"}
                      org.clojure/tools.trace {:mvn/version "0.7.11"}}}
-  
+
   :test {:extra-paths ["test"]
          :extra-deps {lambdaisland/kaocha {:mvn/version "1.87.1366"}
                       org.clojure/test.check {:mvn/version "1.1.1"}
                       mockery/mockery {:mvn/version "0.1.4"}}}
-  
+
   :coverage {:extra-paths ["test"]
              :extra-deps {cloverage/cloverage {:mvn/version "1.2.4"}}
-             :main-opts ["-m" "cloverage.coverage" 
-                        "--codecov"
-                        "--output" "target/coverage"
-                        "--src-ns-path" "src"
-                        "--test-ns-path" "test"]}
-  
+             :main-opts ["-m" "cloverage.coverage"
+                         "--codecov"
+                         "--output" "target/coverage"
+                         "--src-ns-path" "src"
+                         "--test-ns-path" "test"]}
+
   :kondo {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.03.13"}}
           :main-opts ["-m" "clj-kondo.main"]}
-  
+
   :repl {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}
                       cider/cider-nrepl {:mvn/version "0.42.1"}}}
-  
+
   :build {:deps {io.github.clojure/tools.build {:mvn/version "0.9.6"}
                  slipset/deps-deploy {:mvn/version "0.2.0"}}
           :ns-default build}
-  
+
   :uberjar {:replace-deps {org.clojure/clojure {:mvn/version "1.11.1"}}
             :exec-fn hf.depstar/uberjar
             :exec-args {:aot true
                         :jar "target/litellm.jar"
                         :main-class litellm.main}}
-  
+
   :outdated {:replace-deps {com.github.liquidz/antq {:mvn/version "RELEASE"}}
              :main-opts ["-m" "antq.core"]}}}
