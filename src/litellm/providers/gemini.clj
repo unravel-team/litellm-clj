@@ -330,9 +330,9 @@
           (when (= 200 (:status response))
             (let [body (:body response)
                   reader (java.io.BufferedReader. 
-                          (java.io.InputStreamReader. body "UTF-8"))]
+                          (java.io.InputStreamReader. ^java.io.InputStream body "UTF-8"))]
               (loop []
-                (when-let [line (.readLine reader)]
+                (when-let [line (streaming/read-sse-line! reader)]
                   (when (seq (str/trim line))
                     (try
                       (let [parsed (json/decode line true)
@@ -341,7 +341,7 @@
                       (catch Exception e
                         (log/debug "Failed to parse Gemini streaming chunk" {:line line :error (.getMessage e)}))))
                   (recur)))
-              (.close reader)
+              (.close ^java.io.BufferedReader reader)
               (streaming/close-stream! output-ch))))
         
         (catch Exception e

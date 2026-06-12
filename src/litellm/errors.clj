@@ -181,7 +181,7 @@
                            :provider provider
                            :recoverable? true
                            :request-id request-id
-                           :context {:cause (when cause (.getMessage cause))})))
+                           :context {:cause (when cause (.getMessage ^Throwable cause))})))
 
 (defn server-error
   "Provider's server error (500, 502, 503)"
@@ -226,7 +226,7 @@
                            :provider provider
                            :recoverable? (boolean recoverable?)
                            :context {:chunk-number chunk-number
-                                    :cause (when cause (.getMessage cause))})))
+                                    :cause (when cause (.getMessage ^Throwable cause))})))
 
 (defn content-filter
   "Content filtered by provider safety systems"
@@ -247,7 +247,7 @@
   [message & {:keys [cause stack-trace] :as opts}]
   (ex-info message
            (build-error-data :litellm/internal-error message
-                           :context {:cause (when cause (.getMessage cause))
+                           :context {:cause (when cause (.getMessage ^Throwable cause))
                                     :stack-trace stack-trace})))
 
 (defn resource-exhausted
@@ -429,7 +429,7 @@
    :provider-code provider-code
    :recoverable? recoverable?
    :chunk-number chunk-number
-   :cause (when cause (.getMessage cause))})
+   :cause (when cause (.getMessage ^Throwable cause))})
 
 (defn error-chunk?
   "Check if a streaming chunk is an error chunk"

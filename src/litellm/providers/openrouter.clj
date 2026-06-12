@@ -291,14 +291,14 @@
           (when (= 200 (:status response))
             (let [body (:body response)
                   reader (java.io.BufferedReader. 
-                          (java.io.InputStreamReader. body "UTF-8"))]
+                          (java.io.InputStreamReader. ^java.io.InputStream body "UTF-8"))]
               (loop []
-                (when-let [line (.readLine reader)]
+                (when-let [line (streaming/read-sse-line! reader)]
                   (when-let [parsed (streaming/parse-sse-line line json/decode)]
                     (let [transformed (transform-streaming-chunk-impl :openrouter parsed)]
                       (>! output-ch transformed)))
                   (recur)))
-              (.close reader)
+              (.close ^java.io.BufferedReader reader)
               (streaming/close-stream! output-ch))))
         
         (catch Exception e
