@@ -53,6 +53,13 @@ export MISTRAL_API_KEY="..."
 export OPENROUTER_API_KEY="sk-or-..."
 ```
 
+Optional provider-specific overrides:
+
+```bash
+# Defaults to claude-haiku-4-5-20251001
+export ANTHROPIC_E2E_MODEL="claude-haiku-4-5-20251001"
+```
+
 **For GitHub Actions:**
 
 Set these as repository secrets in Settings → Secrets and variables → Actions.
@@ -112,7 +119,7 @@ The tests are designed to be cost-effective:
 ### Estimated Costs Per Provider
 
 - OpenAI (gpt-3.5-turbo): ~$0.001 per test run
-- Anthropic (claude-3-haiku): ~$0.001 per test run
+- Anthropic (claude-haiku-4-5): ~$0.001 per test run
 - Gemini (gemini-1.5-flash): Free tier available
 - Mistral (mistral-small): ~$0.001 per test run
 - OpenRouter (openai/gpt-3.5-turbo): ~$0.001 per test run

@@ -200,7 +200,8 @@
   (testing-with-skippable-provider-errors "Anthropic provider E2E tests"
     (if-let [api-key (not-empty (System/getenv "ANTHROPIC_API_KEY"))]
       (let [provider-name :anthropic
-            model "claude-3-haiku-20240307"]
+            model (or (not-empty (System/getenv "ANTHROPIC_E2E_MODEL"))
+                      "claude-haiku-4-5-20251001")]
         (println (format "\n🧪 Testing %s provider..." provider-name))
         
         (testing "Basic completion"
