@@ -84,7 +84,7 @@
   "Transform Gemini function calls to standard format"
   [function-calls]
   (when function-calls
-    (map (fn [call]
+    (mapv (fn [call]
 
            {:id (str (java.util.UUID/randomUUID))
             :type "function"
@@ -98,7 +98,7 @@
   (let [content (:content candidate)
         parts (:parts content)
         text-content (str/join (map :text parts))
-        tool-calls (when-let [calls (seq (map :functionCall parts))]
+        tool-calls (when-let [calls (seq (keep :functionCall parts))]
                      (transform-tool-calls calls))]
     {:index 0
      :message {:role :assistant
@@ -129,7 +129,7 @@
      :object "chat.completion"
      :created (quot (System/currentTimeMillis) 1000)
      :model (get-in body [:model_version] "gemini-unknown")
-     :choices (map transform-candidate candidates)
+     :choices (mapv transform-candidate candidates)
      :usage (transform-usage usage)}))
 
 ;; ============================================================================

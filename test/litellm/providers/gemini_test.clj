@@ -187,3 +187,18 @@
       (is (= :assistant (get-in transformed [:message :role])))
       (is (= "Hello there" (get-in transformed [:message :content])))
       (is (= :stop (:finish-reason transformed))))))
+
+(deftest test-response-collections-are-vectors
+  (testing "Indexed access works on :choices and :tool-calls"
+    (let [response {:body {:candidates [{:content {:parts [{:text "hi"}
+                                                           {:functionCall {:name "f"
+                                                                           :args {}}}]}
+                                         :finish_reason "STOP"}]
+                           :usageMetadata {:prompt_token_count 1
+                                           :candidates_token_count 2
+                                           :total_token_count 3}}}
+          transformed (gemini/transform-response response)]
+      (is (vector? (:choices transformed)))
+      (is (vector? (get-in transformed [:choices 0 :message :tool-calls])))
+      (is (= "f" (get-in transformed
+                         [:choices 0 :message :tool-calls 0 :function :name]))))))

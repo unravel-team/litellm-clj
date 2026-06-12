@@ -231,3 +231,26 @@
   (testing "Missing api-key throws"
     (let [config {:api-base "https://my-resource.openai.azure.com" :deployment "gpt-4"}]
       (is (thrown? Exception (azure/validate-config config))))))
+
+(deftest test-response-collections-are-vectors
+  (testing "Indexed access works on :choices and :tool-calls"
+    (let [response {:body {:id "r1"
+                           :object "chat.completion"
+                           :created 1
+                           :model "m"
+                           :choices [{:index 0
+                                      :message {:role "assistant"
+                                                :content "hi"
+                                                :tool_calls [{:id "c1"
+                                                              :type "function"
+                                                              :function {:name "f"
+                                                                         :arguments "{}"}}]}
+                                      :finish_reason "tool_calls"}]
+                           :usage {:prompt_tokens 1
+                                   :completion_tokens 2
+                                   :total_tokens 3}}}
+          transformed (azure/transform-response-impl :azure response)]
+      (is (vector? (:choices transformed)))
+      (is (vector? (get-in transformed [:choices 0 :message :tool-calls])))
+      (is (= "f" (get-in transformed
+                         [:choices 0 :message :tool-calls 0 :function :name]))))))

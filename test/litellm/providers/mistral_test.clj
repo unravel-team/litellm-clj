@@ -168,3 +168,26 @@
       (is (= "mistral-small-latest" (:model transformed)))
       ;; Should not have added system message
       (is (= 1 (count (:messages transformed)))))))
+
+(deftest test-response-collections-are-vectors
+  (testing "Indexed access works on :choices and :tool-calls"
+    (let [response {:body {:id "r1"
+                           :object "chat.completion"
+                           :created 1
+                           :model "m"
+                           :choices [{:index 0
+                                      :message {:role "assistant"
+                                                :content "hi"
+                                                :tool_calls [{:id "c1"
+                                                              :type "function"
+                                                              :function {:name "f"
+                                                                         :arguments "{}"}}]}
+                                      :finish_reason "tool_calls"}]
+                           :usage {:prompt_tokens 1
+                                   :completion_tokens 2
+                                   :total_tokens 3}}}
+          transformed (mistral/transform-response-impl :mistral response)]
+      (is (vector? (:choices transformed)))
+      (is (vector? (get-in transformed [:choices 0 :message :tool-calls])))
+      (is (= "f" (get-in transformed
+                         [:choices 0 :message :tool-calls 0 :function :name]))))))
