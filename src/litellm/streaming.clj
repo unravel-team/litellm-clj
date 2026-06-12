@@ -184,6 +184,15 @@
 ;; SSE (Server-Sent Events) Parsing
 ;; ============================================================================
 
+(defn read-sse-line!
+  "Read one line from READER, nil at end of stream.
+
+  A plain fn so go blocks can avoid interop: the go macro's state-machine
+  rewrite strips type hints at park boundaries, turning direct .readLine
+  calls into reflection."
+  ^String [^java.io.BufferedReader reader]
+  (.readLine reader))
+
 (defn parse-sse-line
   "Parse a Server-Sent Events line.
   

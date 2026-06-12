@@ -451,7 +451,7 @@
                   (streaming/close-stream! output-ch))
                 
                 (let [reader (java.io.BufferedReader. 
-                              (java.io.InputStreamReader. body "UTF-8"))]
+                              (java.io.InputStreamReader. ^java.io.InputStream body "UTF-8"))]
                   (try
                     (log/debug "Starting to read SSE stream")
                     (loop [chunk-count 0]

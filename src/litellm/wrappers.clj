@@ -47,7 +47,7 @@
           (:result result)
           (recur (rest remaining)
                  (conj errors {:config config-name
-                              :error (.getMessage (:error result))})))))))
+                              :error (.getMessage ^Throwable (:error result))})))))))
 
 ;; ============================================================================
 ;; Retry Support
@@ -98,15 +98,15 @@
                         {:attempt attempt
                          :max-attempts max-attempts
                          :delay-ms delay-ms
-                         :error (.getMessage (:error result))})
-              (Thread/sleep delay-ms)
+                         :error (.getMessage ^Throwable (:error result))})
+              (Thread/sleep (long delay-ms))
               (recur (inc attempt)))
             
             ;; Max attempts reached or error not retryable
             (do
               (log/error "Request failed after retries"
                          {:attempts attempt
-                          :error (.getMessage (:error result))})
+                          :error (.getMessage ^Throwable (:error result))})
               (throw (:error result)))))))))
 
 ;; ============================================================================
