@@ -61,7 +61,7 @@
   "Transform Mistral tool calls to standard format"
   [tool-calls]
   (when tool-calls
-    (map (fn [tool-call]
+    (mapv (fn [tool-call]
            {:id (:id tool-call)
             :type (:type tool-call)
             :function {:name (get-in tool-call [:function :name])
@@ -210,7 +210,7 @@
      :object (:object body)
      :created (:created body)
      :model (:model body)
-     :choices (map transform-choice (:choices body))
+     :choices (mapv transform-choice (:choices body))
      :usage (transform-usage (:usage body))}))
 
 (defn supports-streaming-impl
