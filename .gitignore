@@ -46,3 +46,4 @@ profiles.clj
 
 # Coverage reports
 /coverage/
+.agents/plans/
