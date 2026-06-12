@@ -3,7 +3,8 @@
   (:require [clojure.test :refer [deftest testing is]]
             [litellm.core :as litellm]
             [cheshire.core :as json]
-            [clojure.core.async :as async]))
+            [clojure.core.async :as async]
+            [clojure.string :as str]))
 
 (def calculator-tool
   "Simple calculator tool for testing"
@@ -30,6 +31,61 @@
                  "add" (+ a b)
                  "multiply" (* a b))]
     (json/encode {:result result})))
+
+(def skippable-provider-error-types
+  #{:litellm/quota-exceeded
+    :litellm/rate-limit})
+
+(defn skippable-provider-error?
+  "True when a live provider account/key is present but cannot currently run E2E calls."
+  [e]
+  (let [data (ex-data e)
+        error-type (:type data)
+        message (str/lower-case (or (:message data) (.getMessage e) ""))]
+    (and (instance? clojure.lang.ExceptionInfo e)
+         (or (contains? skippable-provider-error-types error-type)
+             (and (= :litellm/invalid-request error-type)
+                  (or (str/includes? message "credit balance")
+                      (str/includes? message "purchase credits")
+                      (str/includes? message "insufficient quota")))))))
+
+(defn skip-provider-test!
+  [e]
+  (println (format "⚠️  Provider E2E tests skipped - account state prevents live call: %s"
+                   (.getMessage e)))
+  (when (instance? clojure.lang.ExceptionInfo e)
+    (println (format "    Error data: %s" (pr-str (ex-data e)))))
+  (is true (str "Skipped provider E2E - " (.getMessage e))))
+
+(defmacro testing-with-skippable-provider-errors
+  [string & body]
+  `(testing ~string
+     (try
+       ~@body
+       (catch Exception e#
+         (if (skippable-provider-error? e#)
+           (skip-provider-test! e#)
+           (throw e#))))))
+
+(deftest account-state-errors-are-skippable
+  (testing "quota exhaustion is treated as an untestable live provider account state"
+    (is (skippable-provider-error?
+         (ex-info "quota exhausted" {:type :litellm/quota-exceeded}))))
+  (testing "rate limits are treated as transiently untestable live provider state"
+    (is (skippable-provider-error?
+         (ex-info "rate limited" {:type :litellm/rate-limit}))))
+  (testing "Anthropic low-credit responses are treated as untestable live provider account state"
+    (is (skippable-provider-error?
+         (ex-info "Your credit balance is too low to access the Anthropic API."
+                  {:type :litellm/invalid-request}))))
+  (testing "ordinary invalid requests are still real failures"
+    (is (not (skippable-provider-error?
+              (ex-info "malformed request" {:type :litellm/invalid-request})))))
+  (testing "authentication errors are still real failures"
+    (is (not (skippable-provider-error?
+              (ex-info "bad api key" {:type :litellm/authentication-error})))))
+  (testing "plain exceptions are still real failures"
+    (is (not (skippable-provider-error? (Exception. "plain"))))))
 
 (defn test-function-calling-impl
   "Helper function to test function calling for a provider"
@@ -78,7 +134,7 @@
           (println (format "    Error data: %s" (pr-str (ex-data e)))))))))
 
 (deftest ^:e2e test-openai-provider
-  (testing "OpenAI provider E2E tests"
+  (testing-with-skippable-provider-errors "OpenAI provider E2E tests"
     (if-let [api-key (not-empty (System/getenv "OPENAI_API_KEY"))]
       (let [provider-name :openai
             model "gpt-3.5-turbo"]
@@ -141,7 +197,7 @@
         (is true "Skipped - API key not set")))))
 
 (deftest ^:e2e test-anthropic-provider
-  (testing "Anthropic provider E2E tests"
+  (testing-with-skippable-provider-errors "Anthropic provider E2E tests"
     (if-let [api-key (not-empty (System/getenv "ANTHROPIC_API_KEY"))]
       (let [provider-name :anthropic
             model "claude-3-haiku-20240307"]
