@@ -15,6 +15,7 @@ help:
 	@echo "  deploy  - Deploy to Clojars"
 	@echo "  release-major - Bump major version and commit the bump"
 	@echo "  release-minor - Bump minor version and commit the bump"
+	@echo "  check-reflection - Fail on reflection warnings in src"
 
 repl:
 	clojure -M:repl
@@ -35,6 +36,13 @@ coverage:
 
 lint:
 	clojure -M:kondo --lint src test
+
+# Reflection the JVM tolerates breaks consumers compiling to GraalVM
+# native images, so warnings fail the build. Loads every src namespace.
+check-reflection:
+	@warnings=$$(clojure -M:dev -e "(set! *warn-on-reflection* true) (require '[clojure.tools.namespace.find :as find]) (doseq [n (find/find-namespaces-in-dir (java.io.File. \"src\"))] (require n))" 2>&1 >/dev/null | grep "Reflection warning" || true); \
+	if [ -n "$$warnings" ]; then echo "$$warnings"; exit 1; fi
+	@echo "No reflection warnings"
 
 e2e:
 	@echo "Running E2E provider tests..."
