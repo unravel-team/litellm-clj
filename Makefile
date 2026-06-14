@@ -1,4 +1,4 @@
-.PHONY: help repl nrepl test test-ci coverage lint clean build install deploy e2e test-streaming compile check-reflection check-clean-worktree .release-commit release-major release-minor
+.PHONY: help repl nrepl test test-ci coverage lint clean build install deploy e2e test-streaming compile check-reflection check-clean-worktree .release-commit release-major release-minor current-version
 
 # The library version is maj.min.x: maj.min lives in the VERSION file,
 # x is the git commit count at build time (see build.clj).
@@ -15,6 +15,7 @@ help:
 	@echo "  deploy  - Deploy to Clojars"
 	@echo "  release-major - Bump major version and commit the bump"
 	@echo "  release-minor - Bump minor version and commit the bump"
+	@echo "  current-version - Print current library version"
 	@echo "  check-reflection - Fail on reflection warnings in src"
 
 repl:
@@ -83,6 +84,9 @@ release-minor: check-clean-worktree
 	@maj=$$(cut -d. -f1 $(VERSION_FILE)); min=$$(cut -d. -f2 $(VERSION_FILE)); \
 	echo "$$maj.$$((min+1))" > $(VERSION_FILE)
 	@$(MAKE) .release-commit
+
+current-version:
+	@echo "$$(cat $(VERSION_FILE)).$$(git rev-list --count HEAD 2>/dev/null || echo '?')"
 
 build:
 	clojure -T:build jar
