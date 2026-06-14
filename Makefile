@@ -1,4 +1,8 @@
-.PHONY: help repl nrepl test clean build install check-reflection
+.PHONY: help repl nrepl test test-ci coverage lint clean build install deploy e2e test-streaming compile check-reflection check-clean-worktree .release-commit release-major release-minor
+
+# The library version is maj.min.x: maj.min lives in the VERSION file,
+# x is the git commit count at build time (see build.clj).
+VERSION_FILE := VERSION
 
 help:
 	@echo "Available targets:"
@@ -8,6 +12,9 @@ help:
 	@echo "  clean   - Remove target directory"
 	@echo "  build   - Build the project"
 	@echo "  install - Install to local Maven repository"
+	@echo "  deploy  - Deploy to Clojars"
+	@echo "  release-major - Bump major version and commit the bump"
+	@echo "  release-minor - Bump minor version and commit the bump"
 	@echo "  check-reflection - Fail on reflection warnings in src"
 
 repl:
@@ -45,6 +52,37 @@ e2e:
 
 clean:
 	rm -rf target .cpcache
+
+check-clean-worktree:
+	@if [ -d .jj ]; then \
+		if [ -n "$$(jj diff --summary)" ]; then \
+			echo "Error: working copy is not clean. Commit or abandon changes first."; \
+			exit 1; \
+		fi; \
+	else \
+		git diff --quiet && git diff --cached --quiet || { \
+			echo "Error: working tree is not clean. Commit or stash changes first."; \
+			exit 1; }; \
+	fi
+
+.release-commit:
+	@if [ -d .jj ]; then \
+		jj commit $(VERSION_FILE) -m "chore(release): bump version to $$(cat $(VERSION_FILE))"; \
+	else \
+		git add $(VERSION_FILE) && \
+		git commit -m "chore(release): bump version to $$(cat $(VERSION_FILE))"; \
+	fi
+	@echo "Released version: $$(cat $(VERSION_FILE)).$$(git rev-list --count HEAD 2>/dev/null || echo '?')"
+
+release-major: check-clean-worktree
+	@maj=$$(cut -d. -f1 $(VERSION_FILE)); \
+	echo "$$((maj+1)).0" > $(VERSION_FILE)
+	@$(MAKE) .release-commit
+
+release-minor: check-clean-worktree
+	@maj=$$(cut -d. -f1 $(VERSION_FILE)); min=$$(cut -d. -f2 $(VERSION_FILE)); \
+	echo "$$maj.$$((min+1))" > $(VERSION_FILE)
+	@$(MAKE) .release-commit
 
 build:
 	clojure -T:build jar

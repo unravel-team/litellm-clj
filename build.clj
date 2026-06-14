@@ -1,8 +1,13 @@
 (ns build
-  (:require [clojure.tools.build.api :as b]))
+  (:require [clojure.string :as str]
+            [clojure.tools.build.api :as b]))
 
 (def lib 'tech.unravel/litellm-clj)
-(def version "0.3.0-alpha.2")
+;; The version is maj.min.x: maj.min comes from the VERSION file (bump it
+;; with `make release-major` / `make release-minor`), x is the number of git
+;; commits at build time.
+(def version
+  (format "%s.%s" (str/trim (slurp "VERSION")) (b/git-count-revs nil)))
 (def class-dir "target/classes")
 (def basis (b/create-basis {:project "deps.edn"}))
 (def jar-file (format "target/%s-%s.jar" (name lib) version))
