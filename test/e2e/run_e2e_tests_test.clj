@@ -36,18 +36,35 @@
   #{:litellm/quota-exceeded
     :litellm/rate-limit})
 
+(def transient-provider-error-types
+  #{:litellm/server-error
+    :litellm/timeout
+    :litellm/connection-error})
+
+(def transient-http-statuses
+  #{408 500 502 503 504})
+
 (defn skippable-provider-error?
   "True when a live provider account/key is present but cannot currently run E2E calls."
   [e]
   (let [data (ex-data e)
-        error-type (:type data)
+        error-type (or (:type data) (:error-type data))
+        http-status (:http-status data)
         message (str/lower-case (or (:message data) (.getMessage e) ""))]
     (and (instance? clojure.lang.ExceptionInfo e)
          (or (contains? skippable-provider-error-types error-type)
+             (contains? transient-provider-error-types error-type)
+             (and (= :litellm/provider-error error-type)
+                  (or (:recoverable? data)
+                      (contains? transient-http-statuses http-status)))
+             (and (= :litellm/streaming-error error-type)
+                  (contains? transient-http-statuses http-status))
              (and (= :litellm/invalid-request error-type)
                   (or (str/includes? message "credit balance")
                       (str/includes? message "purchase credits")
-                      (str/includes? message "insufficient quota")))))))
+                      (str/includes? message "insufficient quota")))
+             (str/includes? message "high demand")
+             (str/includes? message "overloaded")))))
 
 (defn skip-provider-test!
   [e]
@@ -78,6 +95,17 @@
     (is (skippable-provider-error?
          (ex-info "Your credit balance is too low to access the Anthropic API."
                   {:type :litellm/invalid-request}))))
+  (testing "provider 503 responses are treated as transient live provider state"
+    (is (skippable-provider-error?
+         (ex-info "The model is overloaded. Please try again later."
+                  {:type :litellm/server-error
+                   :http-status 503
+                   :recoverable? true}))))
+  (testing "streaming 503 chunks are treated as transient live provider state"
+    (is (skippable-provider-error?
+         (ex-info "HTTP 503"
+                  {:error-type :litellm/streaming-error
+                   :http-status 503}))))
   (testing "ordinary invalid requests are still real failures"
     (is (not (skippable-provider-error?
               (ex-info "malformed request" {:type :litellm/invalid-request})))))
@@ -260,7 +288,7 @@
         (is true "Skipped - API key not set")))))
 
 (deftest ^:e2e test-azure-provider
-  (testing "Azure OpenAI provider E2E tests"
+  (testing-with-skippable-provider-errors "Azure OpenAI provider E2E tests"
     (if-let [api-key (not-empty (System/getenv "AZURE_OPENAI_API_KEY"))]
       (let [api-base (not-empty (System/getenv "AZURE_OPENAI_API_BASE"))
             deployment (not-empty (System/getenv "AZURE_OPENAI_DEPLOYMENT"))
@@ -374,7 +402,7 @@
         (is true "Skipped - API key not set")))))
 
 (deftest ^:e2e test-gemini-provider
-  (testing "Gemini provider E2E tests"
+  (testing-with-skippable-provider-errors "Gemini provider E2E tests"
     (if-let [api-key (not-empty (System/getenv "GEMINI_API_KEY"))]
       (let [provider-name :gemini
             model "gemini-2.5-flash-lite"]
@@ -496,7 +524,7 @@
         (is true "Skipped - API key not set")))))
 
 (deftest ^:e2e test-openrouter-provider
-  (testing "OpenRouter provider E2E tests"
+  (testing-with-skippable-provider-errors "OpenRouter provider E2E tests"
     (if-let [api-key (not-empty (System/getenv "OPENROUTER_API_KEY"))]
       (let [provider-name :openrouter
             model "openai/gpt-3.5-turbo"]

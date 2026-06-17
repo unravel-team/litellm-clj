@@ -32,14 +32,17 @@ clojure -M test/e2e/run_e2e_tests.clj
 
 The E2E tests require API keys to be set as environment variables:
 
-| Provider   | Environment Variable    | Get API Key From                           |
-|------------|------------------------|-------------------------------------------|
-| OpenAI     | `OPENAI_API_KEY`       | https://platform.openai.com/api-keys     |
-| Anthropic  | `ANTHROPIC_API_KEY`    | https://console.anthropic.com/            |
-| Gemini     | `GEMINI_API_KEY`       | https://makersuite.google.com/app/apikey |
-| Mistral    | `MISTRAL_API_KEY`      | https://console.mistral.ai/               |
-| OpenRouter | `OPENROUTER_API_KEY`   | https://openrouter.ai/keys                |
-| Ollama     | (no key required)      | https://ollama.ai/ (local server)        |
+| Provider   | Environment Variable                 | Get API Key From                           |
+|------------|--------------------------------------|-------------------------------------------|
+| OpenAI     | `OPENAI_API_KEY`                    | https://platform.openai.com/api-keys     |
+| Anthropic  | `ANTHROPIC_API_KEY`                 | https://console.anthropic.com/            |
+| Gemini     | `GEMINI_API_KEY`                    | https://makersuite.google.com/app/apikey |
+| Mistral    | `MISTRAL_API_KEY`                   | https://console.mistral.ai/               |
+| OpenRouter | `OPENROUTER_API_KEY`                | https://openrouter.ai/keys                |
+| DeepSeek   | `DEEPSEEK_API_KEY`                  | https://platform.deepseek.com/            |
+| Kimi       | `MOONSHOT_API_KEY` or `KIMI_API_KEY` | https://platform.moonshot.ai/             |
+| Z.AI       | `ZAI_API_KEY`                       | https://z.ai/                             |
+| Ollama     | (no key required)                   | https://ollama.ai/ (local server)        |
 
 ### Setting API Keys
 
@@ -51,6 +54,9 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 export GEMINI_API_KEY="..."
 export MISTRAL_API_KEY="..."
 export OPENROUTER_API_KEY="sk-or-..."
+export DEEPSEEK_API_KEY="..."
+export MOONSHOT_API_KEY="..." # or KIMI_API_KEY
+export ZAI_API_KEY="..."
 ```
 
 Optional provider-specific overrides:
@@ -58,6 +64,11 @@ Optional provider-specific overrides:
 ```bash
 # Defaults to claude-haiku-4-5-20251001
 export ANTHROPIC_E2E_MODEL="claude-haiku-4-5-20251001"
+
+# Defaults used by new direct-provider E2E tests
+export DEEPSEEK_E2E_MODEL="deepseek-v4-flash"
+export KIMI_E2E_MODEL="kimi-k2.6"
+export ZAI_E2E_MODEL="glm-5.2"
 ```
 
 **For GitHub Actions:**
@@ -72,6 +83,7 @@ For each configured provider, the E2E tests verify:
 2. **Temperature Control**: Parameter handling (temperature, max_tokens, etc.)
 3. **Helper Functions**: The `litellm/chat` convenience function
 4. **Streaming**: Streaming completion requests and chunk reception
+5. **Direct Provider Additions**: DeepSeek JSON mode, Kimi optional tool calling, and Z.AI thinking-enabled streaming
 
 ### Test Output
 
@@ -123,6 +135,9 @@ The tests are designed to be cost-effective:
 - Gemini (gemini-1.5-flash): Free tier available
 - Mistral (mistral-small): ~$0.001 per test run
 - OpenRouter (openai/gpt-3.5-turbo): ~$0.001 per test run
+- DeepSeek (deepseek-v4-flash): typically <$0.01 per test run
+- Kimi (kimi-k2.6): typically <$0.01 per test run
+- Z.AI (glm-5.2): typically <$0.01 per test run
 - Ollama: Free (local)
 
 ## CI/CD Integration
