@@ -10,6 +10,9 @@
             [litellm.providers.ollama]    ; Load to register provider
             [litellm.providers.openrouter] ; Load to register provider
             [litellm.providers.azure]     ; Load to register provider
+            [litellm.providers.deepseek]  ; Load to register provider
+            [litellm.providers.kimi]      ; Load to register provider
+            [litellm.providers.zai]       ; Load to register provider
             ))
 
 ;; ============================================================================
@@ -43,7 +46,7 @@
   For streaming requests, returns a `core.async` channel.
   
   **Parameters:**
-  - `provider` - Provider keyword (`:openai`, `:anthropic`, `:gemini`, `:mistral`, `:ollama`, `:openrouter`)
+  - `provider` - Provider keyword (`:openai`, `:anthropic`, `:gemini`, `:mistral`, `:ollama`, `:openrouter`, `:deepseek`, `:kimi`, `:zai`)
   - `model` - Model name string (e.g., `\"gpt-4\"`, `\"claude-3-opus-20240229\"`)
   - `request-map` - Request with `:messages`, `:temperature`, `:max-tokens`, etc.
   - `config` - Optional config with `:api-key`, `:api-base`, `:timeout`
@@ -237,6 +240,21 @@
   "Direct OpenRouter completion"
   [model request-map & {:as config}]
   (completion :openrouter model request-map config))
+
+(defn deepseek-completion
+  "Direct DeepSeek completion"
+  [model request-map & {:as config}]
+  (completion :deepseek model request-map config))
+
+(defn kimi-completion
+  "Direct Kimi/Moonshot completion"
+  [model request-map & {:as config}]
+  (completion :kimi model request-map config))
+
+(defn zai-completion
+  "Direct Z.AI completion"
+  [model request-map & {:as config}]
+  (completion :zai model request-map config))
 
 (defn openai-embedding
   "Direct OpenAI embedding"

@@ -173,6 +173,50 @@
       (is (= "openai/gpt-4" (:model config)))
       (is (= "test-key" (get-in config [:config :api-key]))))))
 
+(deftest test-setup-deepseek
+  (testing "Setup DeepSeek with explicit API key"
+    (router/setup-deepseek! :config-name :my-deepseek
+                            :api-key "test-key"
+                            :model "deepseek-v4-pro")
+    (let [config (router/get-config :my-deepseek)]
+      (is (some? config))
+      (is (= :deepseek (:provider config)))
+      (is (= "deepseek-v4-pro" (:model config)))
+      (is (= "test-key" (get-in config [:config :api-key]))))))
+
+(deftest test-setup-kimi
+  (testing "Setup Kimi with explicit API key"
+    (router/setup-kimi! :config-name :my-kimi
+                        :api-key "test-key"
+                        :model "kimi-k2.6")
+    (let [config (router/get-config :my-kimi)]
+      (is (some? config))
+      (is (= :kimi (:provider config)))
+      (is (= "kimi-k2.6" (:model config)))
+      (is (= "test-key" (get-in config [:config :api-key]))))))
+
+(deftest test-setup-kimi-from-env-prefers-moonshot
+  (testing "Setup Kimi prefers MOONSHOT_API_KEY and falls back to KIMI_API_KEY"
+    (with-redefs [litellm.router/env {"MOONSHOT_API_KEY" "moonshot-key"
+                                      "KIMI_API_KEY" "kimi-key"}]
+      (router/setup-kimi!)
+      (is (= "moonshot-key" (get-in (router/get-config :kimi) [:config :api-key]))))
+    (router/clear-router!)
+    (with-redefs [litellm.router/env {"KIMI_API_KEY" "kimi-key"}]
+      (router/setup-kimi!)
+      (is (= "kimi-key" (get-in (router/get-config :kimi) [:config :api-key]))))))
+
+(deftest test-setup-zai
+  (testing "Setup Z.AI with explicit API key"
+    (router/setup-zai! :config-name :my-zai
+                       :api-key "test-key"
+                       :model "glm-5.2")
+    (let [config (router/get-config :my-zai)]
+      (is (some? config))
+      (is (= :zai (:provider config)))
+      (is (= "glm-5.2" (:model config)))
+      (is (= "test-key" (get-in config [:config :api-key]))))))
+
 (deftest test-quick-setup
   (testing "Quick setup registers available providers"
     (router/quick-setup!)
@@ -185,6 +229,20 @@
       (when (System/getenv "ANTHROPIC_API_KEY")
         (is (contains? (set configs) :anthropic))))))
 
+(deftest test-quick-setup-new-providers-from-env
+  (testing "Quick setup registers DeepSeek, Kimi, and Z.AI when env vars exist"
+    (with-redefs [litellm.router/env {"DEEPSEEK_API_KEY" "deep-key"
+                                      "MOONSHOT_API_KEY" "moon-key"
+                                      "ZAI_API_KEY" "zai-key"}]
+      (router/quick-setup!)
+      (let [configs (set (router/list-configs))]
+        (is (contains? configs :deepseek))
+        (is (contains? configs :kimi))
+        (is (contains? configs :zai))
+        (is (= "deep-key" (get-in (router/get-config :deepseek) [:config :api-key])))
+        (is (= "moon-key" (get-in (router/get-config :kimi) [:config :api-key])))
+        (is (= "zai-key" (get-in (router/get-config :zai) [:config :api-key])))))))
+
 ;; ============================================================================
 ;; Provider Discovery (Re-exported from core)
 ;; ============================================================================
@@ -194,11 +252,17 @@
     (let [providers (router/list-providers)]
       (is (coll? providers))
       (is (seq providers))
-      (is (contains? providers :openai)))))
+      (is (contains? providers :openai))
+      (is (contains? providers :deepseek))
+      (is (contains? providers :kimi))
+      (is (contains? providers :zai)))))
 
 (deftest test-provider-available
   (testing "Provider availability check re-exported from core"
     (is (true? (router/provider-available? :openai)))
+    (is (true? (router/provider-available? :deepseek)))
+    (is (true? (router/provider-available? :kimi)))
+    (is (true? (router/provider-available? :zai)))
     (is (false? (router/provider-available? :nonexistent)))))
 
 (deftest test-provider-info
@@ -220,12 +284,18 @@
 (deftest test-supports-streaming
   (testing "Streaming support check re-exported from core"
     (is (true? (router/supports-streaming? :openai)))
-    (is (true? (router/supports-streaming? :anthropic)))))
+    (is (true? (router/supports-streaming? :anthropic)))
+    (is (true? (router/supports-streaming? :deepseek)))
+    (is (true? (router/supports-streaming? :kimi)))
+    (is (true? (router/supports-streaming? :zai)))))
 
 (deftest test-supports-function-calling
   (testing "Function calling support check re-exported from core"
     (is (true? (router/supports-function-calling? :openai)))
-    (is (true? (router/supports-function-calling? :gemini)))))
+    (is (true? (router/supports-function-calling? :gemini)))
+    (is (true? (router/supports-function-calling? :deepseek)))
+    (is (true? (router/supports-function-calling? :kimi)))
+    (is (true? (router/supports-function-calling? :zai)))))
 
 ;; ============================================================================
 ;; Response Utilities (Re-exported from core)
