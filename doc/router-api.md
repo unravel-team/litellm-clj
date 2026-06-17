@@ -155,6 +155,10 @@ Sets up configurations for providers with available API keys:
 - `:gemini` if `GEMINI_API_KEY` is set
 - `:mistral` if `MISTRAL_API_KEY` is set
 - `:openrouter` if `OPENROUTER_API_KEY` is set
+- `:azure` if `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_API_BASE`, and `AZURE_OPENAI_DEPLOYMENT` are set
+- `:deepseek` if `DEEPSEEK_API_KEY` is set
+- `:kimi` if `MOONSHOT_API_KEY` or `KIMI_API_KEY` is set (`MOONSHOT_API_KEY` wins)
+- `:zai` if `ZAI_API_KEY` is set
 - `:ollama` (always, defaults to localhost)
 
 ### setup-openai!
@@ -237,6 +241,43 @@ Quick setup for OpenRouter.
 
 ```clojure
 (router/setup-openrouter! & {:keys [config-name api-key model]})
+```
+
+### setup-deepseek!
+
+Quick setup for DeepSeek. Defaults to config `:deepseek` and model `deepseek-v4-pro`.
+
+```clojure
+(router/setup-deepseek! & {:keys [config-name api-key model]})
+
+(router/setup-deepseek!
+  :config-name :deepseek-fast
+  :model "deepseek-v4-flash")
+```
+
+### setup-kimi!
+
+Quick setup for Kimi/Moonshot. Defaults to config `:kimi` and model `kimi-k2.6`.
+`MOONSHOT_API_KEY` is preferred; `KIMI_API_KEY` is accepted as fallback.
+
+```clojure
+(router/setup-kimi! & {:keys [config-name api-key model]})
+
+(router/setup-kimi!
+  :config-name :kimi-code
+  :model "kimi-k2.7-code")
+```
+
+### setup-zai!
+
+Quick setup for Z.AI GLM. Defaults to config `:zai` and model `glm-5.2`.
+
+```clojure
+(router/setup-zai! & {:keys [config-name api-key model]})
+
+(router/setup-zai!
+  :config-name :glm
+  :model "glm-5.2")
 ```
 
 ## Advanced Routing

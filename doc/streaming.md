@@ -97,8 +97,25 @@ Collect all chunks into a single response.
 | Anthropic    | ✅ Yes           |
 | Gemini       | ✅ Yes           |
 | Mistral      | ✅ Yes           |
+| DeepSeek     | ✅ Yes           |
+| Kimi/Moonshot| ✅ Yes           |
+| Z.AI GLM     | ✅ Yes           |
 | OpenRouter   | ✅ Yes           |
 | Ollama       | ✅ Yes           |
+
+## Reasoning Deltas
+
+Providers with thinking/reasoning support may stream reasoning separately from final content. Read it from `[:choices 0 :delta :reasoning-content]`:
+
+```clojure
+(when-let [reasoning (get-in chunk [:choices 0 :delta :reasoning-content])]
+  (println "[thinking]" reasoning))
+
+(when-let [content (streaming/extract-content chunk)]
+  (print content))
+```
+
+DeepSeek, Kimi/Moonshot, and Z.AI GLM all use this normalized field when their APIs emit `reasoning_content`.
 
 ## Complete Examples
 

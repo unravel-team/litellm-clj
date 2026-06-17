@@ -120,7 +120,7 @@ Both APIs provide provider discovery functions:
 ```clojure
 ;; List all available providers
 (router/list-providers)
-;; => [:openai :anthropic :gemini :mistral :ollama :openrouter]
+;; => [:openai :anthropic :gemini :mistral :ollama :openrouter :deepseek :kimi :zai]
 
 ;; Check if provider is available
 (router/provider-available? :openai)
@@ -134,8 +134,8 @@ Both APIs provide provider discovery functions:
 (router/supports-streaming? :anthropic)
 ;; => true
 
-(router/supports-function-calling? :gemini)
-;; => false
+(router/supports-function-calling? :deepseek)
+;; => true
 ```
 
 ## Error Handling
