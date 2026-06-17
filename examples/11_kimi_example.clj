@@ -6,18 +6,21 @@
             [litellm.router :as router]
             [litellm.streaming :as streaming]))
 
+(def default-model "kimi-k2.6")
+(def code-model "kimi-k2.7-code")
+
 (defn kimi-api-key []
   (or (System/getenv "MOONSHOT_API_KEY")
       (System/getenv "KIMI_API_KEY")))
 
 (defn setup! []
   (router/setup-kimi!
-   :model "kimi-k2.6"
+   :model default-model
    :api-key (kimi-api-key)))
 
 (defn basic-completion []
   (let [response (llm/kimi-completion
-                  "kimi-k2.6"
+                  default-model
                   {:messages [{:role :user
                                :content "Give one practical reason to use Clojure for data pipelines."}]
                    :max-tokens 200
@@ -31,7 +34,7 @@
 
 (defn json-schema-completion []
   (llm/kimi-completion
-   "kimi-k2.6"
+   default-model
    {:messages [{:role :user
                 :content "Return a tiny project estimate for adding a cache."}]
     :response-format {:type :json-schema
@@ -46,7 +49,7 @@
 (defn k2-7-code-example []
   ;; Kimi K2.7 Code thinking cannot be disabled. Omit :thinking or use enabled.
   (llm/kimi-completion
-   "kimi-k2.7-code"
+   code-model
    {:messages [{:role :user
                 :content "Write a small Clojure function that increments a number."}]
     :max-tokens 300
@@ -55,7 +58,7 @@
 
 (defn streaming-reasoning []
   (let [ch (llm/kimi-completion
-            "kimi-k2.6"
+            default-model
             {:messages [{:role :user
                          :content "Think briefly, then summarize transducers."}]
              :thinking {:type :enabled}

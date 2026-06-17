@@ -115,26 +115,34 @@ For detailed API documentation:
 
 ## Provider Discovery
 
-Both APIs provide provider discovery functions:
+Both APIs provide the same provider discovery helpers. Use `litellm.router` when working with registered configs, or `litellm.core` for direct access:
 
 ```clojure
+(require '[litellm.core :as core]
+         '[litellm.router :as router])
+
 ;; List all available providers
 (router/list-providers)
+(core/list-providers)
 ;; => [:openai :anthropic :gemini :mistral :ollama :openrouter :deepseek :kimi :zai]
 
 ;; Check if provider is available
 (router/provider-available? :openai)
+(core/provider-available? :openai)
 ;; => true
 
 ;; Get provider capabilities
 (router/provider-info :openai)
+(core/provider-info :openai)
 ;; => {:streaming true :function-calling true ...}
 
 ;; Check specific capabilities
 (router/supports-streaming? :anthropic)
+(core/supports-streaming? :anthropic)
 ;; => true
 
 (router/supports-function-calling? :deepseek)
+(core/supports-function-calling? :deepseek)
 ;; => true
 ```
 

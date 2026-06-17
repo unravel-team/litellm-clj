@@ -6,17 +6,20 @@
             [litellm.router :as router]
             [litellm.streaming :as streaming]))
 
+(def default-model "deepseek-v4-pro")
+(def flash-model "deepseek-v4-flash")
+
 (defn deepseek-api-key []
   (System/getenv "DEEPSEEK_API_KEY"))
 
 (defn setup! []
   (router/setup-deepseek!
-   :model "deepseek-v4-pro"
+   :model default-model
    :api-key (deepseek-api-key)))
 
 (defn basic-completion []
   (let [response (llm/deepseek-completion
-                  "deepseek-v4-pro"
+                  default-model
                   {:messages [{:role :user
                                :content "Explain why Clojure maps are useful in two sentences."}]
                    :max-tokens 200
@@ -30,7 +33,7 @@
 
 (defn json-mode-completion []
   (llm/deepseek-completion
-   "deepseek-v4-flash"
+   flash-model
    {:messages [{:role :system
                 :content "Return only valid JSON."}
                {:role :user
@@ -41,7 +44,7 @@
 
 (defn streaming-reasoning []
   (let [ch (llm/deepseek-completion
-            "deepseek-v4-flash"
+            flash-model
             {:messages [{:role :user
                          :content "Think briefly, then list three Clojure strengths."}]
              :reasoning-effort :high

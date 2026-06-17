@@ -6,17 +6,19 @@
             [litellm.router :as router]
             [litellm.streaming :as streaming]))
 
+(def default-model "glm-5.2")
+
 (defn zai-api-key []
   (System/getenv "ZAI_API_KEY"))
 
 (defn setup! []
   (router/setup-zai!
-   :model "glm-5.2"
+   :model default-model
    :api-key (zai-api-key)))
 
 (defn basic-completion []
   (let [response (llm/zai-completion
-                  "glm-5.2"
+                  default-model
                   {:messages [{:role :user
                                :content "Explain one advantage of persistent data structures."}]
                    :max-tokens 200
@@ -31,7 +33,7 @@
 
 (defn json-mode-completion []
   (llm/zai-completion
-   "glm-5.2"
+   default-model
    {:messages [{:role :system
                 :content "Return only valid JSON."}
                {:role :user
@@ -43,7 +45,7 @@
 
 (defn automatic-tool-choice-example []
   (llm/zai-completion
-   "glm-5.2"
+   default-model
    {:messages [{:role :user
                 :content "What tool would you call to get weather in Paris?"}]
     :tools [{:type "function"
@@ -59,7 +61,7 @@
 
 (defn streaming-reasoning []
   (let [ch (llm/zai-completion
-            "glm-5.2"
+            default-model
             {:messages [{:role :user
                          :content "Think briefly, then name two immutable data benefits."}]
              :reasoning-effort :high
