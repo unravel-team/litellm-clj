@@ -3,6 +3,87 @@
             [litellm.schemas :as schemas]))
 
 ;; ============================================================================
+;; Completion Request Schema Tests
+;; ============================================================================
+
+(def base-completion-request
+  {:model "provider-model"
+   :messages [{:role :user :content "Hello"}]})
+
+(deftest test-completion-request-provider-fields-survive-transform
+  (testing "OpenAI-compatible provider request fields validate and survive decode"
+    (let [provider-keys [:response-format :stream-options :do-sample :tool-stream
+                         :prompt-cache-key :safety-identifier :request-id :user-id
+                         :extra-body]
+          request (assoc base-completion-request
+                         :response-format {:type :json-object}
+                         :stream-options {:include-usage true}
+                         :do-sample true
+                         :tool-stream true
+                         :prompt-cache-key "cache-key"
+                         :safety-identifier "safe-user"
+                         :request-id "req-123"
+                         :user-id "user-123"
+                         :extra-body {:custom_vendor_field "value"})
+          transformed (schemas/transform-request request)]
+      (is (true? (schemas/valid-request? request)))
+      (is (= (select-keys request provider-keys)
+             (select-keys transformed provider-keys))))))
+
+(deftest test-completion-request-message-content-shapes
+  (testing "Messages accept nil content, reasoning metadata, tool calls, partial, and content parts"
+    (let [request {:model "provider-model"
+                   :messages [{:role :system :content nil}
+                              {:role :user
+                               :content [{:type "text" :text "Describe image"}
+                                         {:type "image_url"
+                                          :image_url {:url "https://example.com/cat.png"}}]}
+                              {:role :assistant
+                               :content nil
+                               :reasoning-content "I inspected the prompt."
+                               :tool-calls [{:id "call_123"
+                                             :type "function"
+                                             :function {:name "lookup"
+                                                        :arguments "{}"}}]
+                               :partial true}]}]
+      (is (true? (schemas/valid-request? request)))
+      (is (= request (schemas/transform-request request))))))
+
+(deftest test-completion-request-tool-shapes
+  (testing "Canonical and existing tool shapes both validate"
+    (let [canonical (assoc base-completion-request
+                           :tools [{:type "function"
+                                    :function {:name "lookup"
+                                               :description "Lookup information"
+                                               :parameters {:type "object"}
+                                               :strict true}}])
+          legacy (assoc base-completion-request
+                        :tools [{:tool-type "function"
+                                 :function {:function-name "lookup"
+                                            :function-description "Lookup information"
+                                            :function-parameters {:type "object"}}}])]
+      (is (true? (schemas/valid-request? canonical)))
+      (is (= (:tools canonical) (:tools (schemas/transform-request canonical))))
+      (is (true? (schemas/valid-request? legacy)))
+      (is (= (:tools legacy) (:tools (schemas/transform-request legacy)))))))
+
+(deftest test-completion-request-reasoning-and-thinking-shapes
+  (testing "Expanded reasoning efforts and thinking config validate"
+    (doseq [effort [:minimal :none :low :medium :high :xhigh :max]]
+      (is (true? (schemas/valid-request?
+                  (assoc base-completion-request :reasoning-effort effort)))
+          (str "Expected reasoning effort " effort " to validate")))
+    (doseq [thinking [{:type :enabled}
+                      {:type :disabled}
+                      {:type :enabled :budget-tokens 1024}
+                      {:type :enabled :keep :all}
+                      {:type :disabled :clear-thinking false}]]
+      (is (true? (schemas/valid-request?
+                  (assoc base-completion-request :thinking thinking)))
+          (str "Expected thinking config " thinking " to validate")))))
+
+
+;; ============================================================================
 ;; Embedding Request Schema Tests
 ;; ============================================================================
 

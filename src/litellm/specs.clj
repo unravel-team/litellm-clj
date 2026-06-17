@@ -7,13 +7,21 @@
 ;; ============================================================================
 
 (s/def ::role #{:user :assistant :system :tool})
-(s/def ::content string?)
+(s/def ::content-part map?)
+(s/def ::content
+  (s/nilable (s/or :string string?
+                   :parts (s/coll-of ::content-part :kind vector?))))
 (s/def ::name string?)
 (s/def ::tool-call-id string?)
+(s/def ::reasoning-content string?)
+(s/def ::tool-calls (s/coll-of map? :kind vector?))
+(s/def ::partial boolean?)
+(s/def ::thinking-blocks (s/coll-of map? :kind vector?))
 
-(s/def ::message 
-  (s/keys :req-un [::role ::content]
-          :opt-un [::name ::tool-call-id]))
+(s/def ::message
+  (s/keys :req-un [::role]
+          :opt-un [::content ::name ::tool-call-id ::reasoning-content
+                   ::tool-calls ::partial ::thinking-blocks]))
 
 (s/def ::messages 
   (s/coll-of ::message :min-count 1))
@@ -43,21 +51,60 @@
 (s/def ::function-name string?)
 (s/def ::function-description string?)
 (s/def ::function-parameters map?)
-
-(s/def ::function
-  (s/keys :req-un [::function-name ::function-description]
-          :opt-un [::function-parameters]))
+(s/def ::function map?)
 
 (s/def ::functions (s/coll-of ::function))
 (s/def ::function-call (s/or :auto #{:auto} :none #{:none} :function ::function))
 
-;; Tools (newer function calling format)
+;; Tools (newer function calling format and existing legacy shape)
 (s/def ::tool-type #{"function"})
-(s/def ::tool
-  (s/keys :req-un [::tool-type ::function]))
+(defn canonical-tool?
+  [tool]
+  (and (map? tool)
+       (= "function" (:type tool))
+       (map? (:function tool))))
 
+(defn legacy-tool?
+  [tool]
+  (and (map? tool)
+       (= "function" (:tool-type tool))
+       (map? (:function tool))))
+
+(s/def ::tool (s/or :canonical canonical-tool? :legacy legacy-tool?))
 (s/def ::tools (s/coll-of ::tool))
-(s/def ::tool-choice (s/or :auto #{:auto} :none #{:none} :required #{:required}))
+(s/def ::tool-choice
+  (s/or :keyword #{:auto :none :required :any}
+        :string #{"auto" "none" "required" "any"}
+        :map map?))
+
+;; Reasoning/thinking and provider-specific passthrough fields
+(s/def ::reasoning-effort
+  #{:minimal :none :low :medium :high :xhigh :max
+    "minimal" "none" "low" "medium" "high" "xhigh" "max"})
+(s/def ::budget-tokens pos-int?)
+(s/def ::keep #{:all "all"})
+(s/def ::clear-thinking boolean?)
+(defn thinking-config?
+  [thinking]
+  (and (map? thinking)
+       (contains? thinking :type)
+       (#{:enabled :disabled "enabled" "disabled"} (:type thinking))
+       (or (not (contains? thinking :budget-tokens))
+           (pos-int? (:budget-tokens thinking)))
+       (or (not (contains? thinking :keep))
+           (#{:all "all"} (:keep thinking)))
+       (or (not (contains? thinking :clear-thinking))
+           (boolean? (:clear-thinking thinking)))))
+(s/def ::thinking thinking-config?)
+(s/def ::response-format map?)
+(s/def ::stream-options map?)
+(s/def ::do-sample boolean?)
+(s/def ::tool-stream boolean?)
+(s/def ::prompt-cache-key string?)
+(s/def ::safety-identifier string?)
+(s/def ::request-id string?)
+(s/def ::user-id string?)
+(s/def ::extra-body map?)
 
 ;; ============================================================================
 ;; Request Specification
@@ -67,7 +114,10 @@
   (s/keys :req-un [::model ::messages]
           :opt-un [::api-key ::api-base ::max-tokens ::temperature ::top-p
                    ::frequency-penalty ::presence-penalty ::stream ::stop
-                   ::functions ::function-call ::tools ::tool-choice]))
+                   ::functions ::function-call ::tools ::tool-choice
+                   ::reasoning-effort ::thinking ::response-format ::stream-options
+                   ::do-sample ::tool-stream ::prompt-cache-key ::safety-identifier
+                   ::request-id ::user-id ::extra-body]))
 
 ;; ============================================================================
 ;; Response Specifications
@@ -88,7 +138,7 @@
 
 ;; Choice information
 (s/def ::index nat-int?)
-(s/def ::finish-reason #{:stop :length :function_call :tool_calls :content_filter})
+(s/def ::finish-reason (s/or :keyword keyword? :string string?))
 
 (s/def ::choice
   (s/keys :req-un [::index ::message ::finish-reason]))
