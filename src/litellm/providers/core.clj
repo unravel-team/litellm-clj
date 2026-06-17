@@ -12,6 +12,7 @@
             [litellm.providers.openrouter :as openrouter]
             [litellm.providers.azure :as azure]
             [litellm.providers.deepseek :as deepseek]
+            [litellm.providers.kimi :as kimi]
             [litellm.providers.zai :as zai]))
 
 ;; ============================================================================
@@ -49,6 +50,9 @@
 (defmethod transform-request :deepseek [provider-name request config]
   (deepseek/transform-request-impl provider-name request config))
 
+(defmethod transform-request :kimi [provider-name request config]
+  (kimi/transform-request-impl provider-name request config))
+
 (defmethod transform-request :zai [provider-name request config]
   (zai/transform-request-impl provider-name request config))
 
@@ -83,6 +87,9 @@
 (defmethod make-request :deepseek [provider-name transformed-request thread-pool telemetry config]
   (deepseek/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
+(defmethod make-request :kimi [provider-name transformed-request thread-pool telemetry config]
+  (kimi/make-request-impl provider-name transformed-request thread-pool telemetry config))
+
 (defmethod make-request :zai [provider-name transformed-request thread-pool telemetry config]
   (zai/make-request-impl provider-name transformed-request thread-pool telemetry config))
 
@@ -110,6 +117,9 @@
 
 (defmethod make-streaming-request :deepseek [provider-name transformed-request thread-pool config]
   (deepseek/make-streaming-request-impl provider-name transformed-request thread-pool config))
+
+(defmethod make-streaming-request :kimi [provider-name transformed-request thread-pool config]
+  (kimi/make-streaming-request-impl provider-name transformed-request thread-pool config))
 
 (defmethod make-streaming-request :zai [provider-name transformed-request thread-pool config]
   (zai/make-streaming-request-impl provider-name transformed-request thread-pool config))
@@ -145,6 +155,9 @@
 (defmethod transform-response :deepseek [provider-name response]
   (deepseek/transform-response-impl provider-name response))
 
+(defmethod transform-response :kimi [provider-name response]
+  (kimi/transform-response-impl provider-name response))
+
 (defmethod transform-response :zai [provider-name response]
   (zai/transform-response-impl provider-name response))
 
@@ -172,6 +185,9 @@
 
 (defmethod transform-streaming-chunk :deepseek [provider-name chunk]
   (deepseek/transform-streaming-chunk-impl provider-name chunk))
+
+(defmethod transform-streaming-chunk :kimi [provider-name chunk]
+  (kimi/transform-streaming-chunk-impl provider-name chunk))
 
 (defmethod transform-streaming-chunk :zai [provider-name chunk]
   (zai/transform-streaming-chunk-impl provider-name chunk))
@@ -209,6 +225,9 @@
 (defmethod supports-streaming? :deepseek [provider-name]
   (deepseek/supports-streaming-impl provider-name))
 
+(defmethod supports-streaming? :kimi [provider-name]
+  (kimi/supports-streaming-impl provider-name))
+
 (defmethod supports-streaming? :zai [provider-name]
   (zai/supports-streaming-impl provider-name))
 
@@ -244,6 +263,9 @@
 
 (defmethod supports-function-calling? :deepseek [provider-name]
   (deepseek/supports-function-calling-impl provider-name))
+
+(defmethod supports-function-calling? :kimi [provider-name]
+  (kimi/supports-function-calling-impl provider-name))
 
 (defmethod supports-function-calling? :zai [provider-name]
   (zai/supports-function-calling-impl provider-name))
@@ -283,6 +305,9 @@
 (defmethod get-rate-limits :deepseek [provider-name]
   (deepseek/get-rate-limits-impl provider-name))
 
+(defmethod get-rate-limits :kimi [provider-name]
+  (kimi/get-rate-limits-impl provider-name))
+
 (defmethod get-rate-limits :zai [provider-name]
   (zai/get-rate-limits-impl provider-name))
 
@@ -316,6 +341,9 @@
 
 (defmethod health-check :deepseek [provider-name thread-pool config]
   (deepseek/health-check-impl provider-name thread-pool config))
+
+(defmethod health-check :kimi [provider-name thread-pool config]
+  (kimi/health-check-impl provider-name thread-pool config))
 
 (defmethod health-check :zai [provider-name thread-pool config]
   (zai/health-check-impl provider-name thread-pool config))
@@ -353,6 +381,9 @@
 
 (defmethod get-cost-per-token :deepseek [provider-name model]
   (deepseek/get-cost-per-token-impl provider-name model))
+
+(defmethod get-cost-per-token :kimi [provider-name model]
+  (kimi/get-cost-per-token-impl provider-name model))
 
 (defmethod get-cost-per-token :zai [provider-name model]
   (zai/get-cost-per-token-impl provider-name model))
