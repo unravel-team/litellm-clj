@@ -47,3 +47,4 @@ profiles.clj
 # Coverage reports
 /coverage/
 .agents/plans/
+.pi/extensions/simplify-code.json
