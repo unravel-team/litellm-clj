@@ -4,6 +4,11 @@
             [litellm.core :as core]
             [litellm.config :as config]))
 
+(defn- env
+  "Read process environment by name. Kept as a var so tests can rebind it."
+  [name]
+  (System/getenv name))
+
 ;; ============================================================================
 ;; Re-export Configuration Router Functions
 ;; ============================================================================
@@ -110,7 +115,7 @@
   [& {:keys [config-name api-key model]
       :or {config-name :openai
            model "gpt-4o-mini"}}]
-  (let [key (or api-key (System/getenv "OPENAI_API_KEY"))]
+  (let [key (or api-key (env "OPENAI_API_KEY"))]
     (when-not key
       (throw (ex-info "OpenAI API key not provided and OPENAI_API_KEY env var not set" {})))
     (register! config-name
@@ -123,7 +128,7 @@
   [& {:keys [config-name api-key model]
       :or {config-name :anthropic
            model "claude-3-sonnet-20240229"}}]
-  (let [key (or api-key (System/getenv "ANTHROPIC_API_KEY"))]
+  (let [key (or api-key (env "ANTHROPIC_API_KEY"))]
     (when-not key
       (throw (ex-info "Anthropic API key not provided and ANTHROPIC_API_KEY env var not set" {})))
     (register! config-name
@@ -136,7 +141,7 @@
   [& {:keys [config-name api-key model]
       :or {config-name :gemini
            model "gemini-pro"}}]
-  (let [key (or api-key (System/getenv "GEMINI_API_KEY"))]
+  (let [key (or api-key (env "GEMINI_API_KEY"))]
     (when-not key
       (throw (ex-info "Gemini API key not provided and GEMINI_API_KEY env var not set" {})))
     (register! config-name
@@ -149,7 +154,7 @@
   [& {:keys [config-name api-key model]
       :or {config-name :mistral
            model "mistral-medium"}}]
-  (let [key (or api-key (System/getenv "MISTRAL_API_KEY"))]
+  (let [key (or api-key (env "MISTRAL_API_KEY"))]
     (when-not key
       (throw (ex-info "Mistral API key not provided and MISTRAL_API_KEY env var not set" {})))
     (register! config-name
@@ -173,7 +178,7 @@
   [& {:keys [config-name api-key model]
       :or {config-name :openrouter
            model "openai/gpt-4"}}]
-  (let [key (or api-key (System/getenv "OPENROUTER_API_KEY"))]
+  (let [key (or api-key (env "OPENROUTER_API_KEY"))]
     (when-not key
       (throw (ex-info "OpenRouter API key not provided and OPENROUTER_API_KEY env var not set" {})))
     (register! config-name
@@ -195,9 +200,9 @@
   [& {:keys [config-name api-key api-base deployment api-version]
       :or {config-name :azure
            api-version "2024-10-21"}}]
-  (let [key (or api-key (System/getenv "AZURE_OPENAI_API_KEY"))
-        base (or api-base (System/getenv "AZURE_OPENAI_API_BASE"))
-        deploy (or deployment (System/getenv "AZURE_OPENAI_DEPLOYMENT"))]
+  (let [key (or api-key (env "AZURE_OPENAI_API_KEY"))
+        base (or api-base (env "AZURE_OPENAI_API_BASE"))
+        deploy (or deployment (env "AZURE_OPENAI_DEPLOYMENT"))]
     (when-not key
       (throw (ex-info "Azure OpenAI API key not provided and AZURE_OPENAI_API_KEY env var not set" {})))
     (when-not base
@@ -212,6 +217,45 @@
                          :deployment deploy
                          :api-version api-version}})))
 
+(defn setup-deepseek!
+  "Quick setup for DeepSeek with optional custom config name"
+  [& {:keys [config-name api-key model]
+      :or {config-name :deepseek
+           model "deepseek-v4-pro"}}]
+  (let [key (or api-key (env "DEEPSEEK_API_KEY"))]
+    (when-not key
+      (throw (ex-info "DeepSeek API key not provided and DEEPSEEK_API_KEY env var not set" {})))
+    (register! config-name
+               {:provider :deepseek
+                :model model
+                :config {:api-key key}})))
+
+(defn setup-kimi!
+  "Quick setup for Kimi/Moonshot with optional custom config name"
+  [& {:keys [config-name api-key model]
+      :or {config-name :kimi
+           model "kimi-k2.6"}}]
+  (let [key (or api-key (env "MOONSHOT_API_KEY") (env "KIMI_API_KEY"))]
+    (when-not key
+      (throw (ex-info "Kimi API key not provided and neither MOONSHOT_API_KEY nor KIMI_API_KEY env var is set" {})))
+    (register! config-name
+               {:provider :kimi
+                :model model
+                :config {:api-key key}})))
+
+(defn setup-zai!
+  "Quick setup for Z.AI with optional custom config name"
+  [& {:keys [config-name api-key model]
+      :or {config-name :zai
+           model "glm-5.2"}}]
+  (let [key (or api-key (env "ZAI_API_KEY"))]
+    (when-not key
+      (throw (ex-info "Z.AI API key not provided and ZAI_API_KEY env var not set" {})))
+    (register! config-name
+               {:provider :zai
+                :model model
+                :config {:api-key key}})))
+
 (defn quick-setup!
   "Quick setup for common providers using environment variables
 
@@ -221,27 +265,40 @@
   - :gemini if GEMINI_API_KEY is set
   - :mistral if MISTRAL_API_KEY is set
   - :azure if AZURE_OPENAI_API_KEY, AZURE_OPENAI_API_BASE, and AZURE_OPENAI_DEPLOYMENT are set
+  - :deepseek if DEEPSEEK_API_KEY is set
+  - :kimi if MOONSHOT_API_KEY or KIMI_API_KEY is set
+  - :zai if ZAI_API_KEY is set
   - :ollama (always, defaults to localhost)"
   []
-  (when (System/getenv "OPENAI_API_KEY")
+  (when (env "OPENAI_API_KEY")
     (setup-openai!))
 
-  (when (System/getenv "ANTHROPIC_API_KEY")
+  (when (env "ANTHROPIC_API_KEY")
     (setup-anthropic!))
 
-  (when (System/getenv "GEMINI_API_KEY")
+  (when (env "GEMINI_API_KEY")
     (setup-gemini!))
 
-  (when (System/getenv "MISTRAL_API_KEY")
+  (when (env "MISTRAL_API_KEY")
     (setup-mistral!))
 
-  (when (System/getenv "OPENROUTER_API_KEY")
+  (when (env "OPENROUTER_API_KEY")
     (setup-openrouter!))
 
-  (when (and (System/getenv "AZURE_OPENAI_API_KEY")
-             (System/getenv "AZURE_OPENAI_API_BASE")
-             (System/getenv "AZURE_OPENAI_DEPLOYMENT"))
+  (when (and (env "AZURE_OPENAI_API_KEY")
+             (env "AZURE_OPENAI_API_BASE")
+             (env "AZURE_OPENAI_DEPLOYMENT"))
     (setup-azure!))
+
+  (when (env "DEEPSEEK_API_KEY")
+    (setup-deepseek!))
+
+  (when (or (env "MOONSHOT_API_KEY")
+            (env "KIMI_API_KEY"))
+    (setup-kimi!))
+
+  (when (env "ZAI_API_KEY")
+    (setup-zai!))
 
   (setup-ollama!)
 

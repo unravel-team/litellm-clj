@@ -15,12 +15,18 @@
       (is (seq providers))
       (is (contains? providers :openai))
       (is (contains? providers :anthropic))
-      (is (contains? providers :gemini)))))
+      (is (contains? providers :gemini))
+      (is (contains? providers :deepseek))
+      (is (contains? providers :kimi))
+      (is (contains? providers :zai)))))
 
 (deftest test-provider-available
   (testing "Check if provider is available"
     (is (true? (core/provider-available? :openai)))
     (is (true? (core/provider-available? :anthropic)))
+    (is (true? (core/provider-available? :deepseek)))
+    (is (true? (core/provider-available? :kimi)))
+    (is (true? (core/provider-available? :zai)))
     (is (false? (core/provider-available? :nonexistent)))))
 
 (deftest test-provider-info
@@ -37,7 +43,10 @@
   (testing "Check streaming support for providers"
     (is (true? (core/supports-streaming? :openai)))
     (is (true? (core/supports-streaming? :anthropic)))
-    (is (true? (core/supports-streaming? :gemini)))))
+    (is (true? (core/supports-streaming? :gemini)))
+    (is (true? (core/supports-streaming? :deepseek)))
+    (is (true? (core/supports-streaming? :kimi)))
+    (is (true? (core/supports-streaming? :zai)))))
 
 
 (deftest test-validate-request
@@ -202,6 +211,36 @@
     (is (thrown? Exception
                  (core/openrouter-completion "openai/gpt-4"
                                             {:messages [{:role :user :content "test"}]})))))
+
+(deftest test-new-provider-completion-helpers
+  (testing "New provider completion helpers delegate to core completion with provider keywords"
+    (let [calls (atom [])
+          request {:messages [{:role :user :content "test"}]}]
+      (with-redefs [core/completion (fn [provider model request-map config]
+                                      (swap! calls conj {:provider provider
+                                                         :model model
+                                                         :request request-map
+                                                         :config config})
+                                      {:provider provider})]
+        (is (= {:provider :deepseek}
+               (core/deepseek-completion "deepseek-v4-pro" request :api-key "deep")))
+        (is (= {:provider :kimi}
+               (core/kimi-completion "kimi-k2.6" request :api-key "moon")))
+        (is (= {:provider :zai}
+               (core/zai-completion "glm-5.2" request :api-key "zai"))))
+      (is (= [{:provider :deepseek
+               :model "deepseek-v4-pro"
+               :request request
+               :config {:api-key "deep"}}
+              {:provider :kimi
+               :model "kimi-k2.6"
+               :request request
+               :config {:api-key "moon"}}
+              {:provider :zai
+               :model "glm-5.2"
+               :request request
+               :config {:api-key "zai"}}]
+             @calls)))))
 
 ;; ============================================================================
 ;; Chat Convenience Function Tests
