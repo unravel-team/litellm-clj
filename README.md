@@ -49,6 +49,9 @@ LiteLLM Clojure provides a unified, idiomatic Clojure interface for interacting 
 | OpenRouter   | ✅ Supported | All OpenRouter models                      | ✅               | ✅        |
 | Google Gemini| ✅ Supported | Gemini Pro, Gemini Pro Vision, Gemini Ultra| ❌               | ✅        |
 | Mistral      | ✅ Supported | Mistral Small/Medium/Large, Codestral, Magistral | ✅               | ✅        |
+| DeepSeek     | ✅ Supported | deepseek-v4-flash, deepseek-v4-pro        | ✅               | ✅        |
+| Kimi/Moonshot| ✅ Supported | kimi-k2.7-code, kimi-k2.6, kimi-k2.5, moonshot-v1 | ✅ | ✅        |
+| Z.AI GLM     | ✅ Supported | glm-5.2, glm-5.1, glm-4.7, glm-4.5       | ✅               | ✅        |
 | Ollama       | ✅ Supported | Local models                               | ✅               | ✅        |
 
 ### Optional Providers
@@ -123,7 +126,10 @@ For configuration-based workflows with named configs:
 ```clojure
 (require '[litellm.router :as router])
 
-;; Quick setup from environment variables
+;; Quick setup from environment variables:
+;; OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, MISTRAL_API_KEY,
+;; OPENROUTER_API_KEY, DEEPSEEK_API_KEY, MOONSHOT_API_KEY/KIMI_API_KEY,
+;; ZAI_API_KEY, and local Ollama.
 (router/quick-setup!)
 
 ;; Or register custom configurations
@@ -145,7 +151,6 @@ For configuration-based workflows with named configs:
 For simple, direct provider calls:
 
 ```clojure
-```clojure
 (require '[litellm.core :as core])
 
 ;; Direct provider calls without registration
@@ -153,6 +158,11 @@ For simple, direct provider calls:
                                 {:messages [{:role :user :content "Hello"}]
                                  :api-key (System/getenv "OPENAI_API_KEY")})]
   (println (core/extract-content response)))
+
+;; New OpenAI-compatible providers expose convenience helpers too:
+(core/deepseek-completion "deepseek-v4-pro" {...} :api-key (System/getenv "DEEPSEEK_API_KEY"))
+(core/kimi-completion "kimi-k2.6" {...} :api-key (System/getenv "MOONSHOT_API_KEY"))
+(core/zai-completion "glm-5.2" {...} :api-key (System/getenv "ZAI_API_KEY"))
 ```
 
 ### Streaming Responses
@@ -216,6 +226,7 @@ For simple, direct provider calls:
 - **[API Guide](doc/api-guide.md)** - Comprehensive API reference
 - **[Error Handling](doc/error_handling.md)** - Examples related to error handling
 - **[Streaming Guide](doc/streaming.md)** - Detailed streaming documentation
+- **[Reasoning Guide](doc/reasoning.md)** - Thinking/reasoning fields, including DeepSeek, Kimi, and Z.AI
 - **[Examples](examples/)** - More code examples
 
 ---

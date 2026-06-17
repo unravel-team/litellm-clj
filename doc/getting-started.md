@@ -82,6 +82,9 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 export GEMINI_API_KEY="..."
 export MISTRAL_API_KEY="..."
 export OPENROUTER_API_KEY="sk-or-..."
+export DEEPSEEK_API_KEY="..."
+export MOONSHOT_API_KEY="..."   # or KIMI_API_KEY
+export ZAI_API_KEY="..."
 ```
 
 Then use `quick-setup!`:
@@ -97,6 +100,9 @@ Then use `quick-setup!`:
 (router/setup-openai! :api-key "sk-..." :model "gpt-4")
 (router/setup-anthropic! :api-key "sk-ant-..." :model "claude-3-sonnet-20240229")
 (router/setup-gemini! :api-key "..." :model "gemini-pro")
+(router/setup-deepseek! :api-key "..." :model "deepseek-v4-pro")
+(router/setup-kimi! :api-key "..." :model "kimi-k2.6")
+(router/setup-zai! :api-key "..." :model "glm-5.2")
 ```
 
 ## Your First Request
@@ -148,6 +154,9 @@ Then use `quick-setup!`:
 | Anthropic    | ✅     | Claude 3 (Opus, Sonnet, Haiku) |
 | Google Gemini| ✅     | Gemini Pro, Ultra |
 | Mistral      | ✅     | Mistral Small/Medium/Large |
+| DeepSeek     | ✅     | deepseek-v4-flash, deepseek-v4-pro |
+| Kimi/Moonshot| ✅     | kimi-k2.7-code, kimi-k2.6, kimi-k2.5, moonshot-v1 |
+| Z.AI GLM     | ✅     | glm-5.2, glm-5.1, glm-4.7, glm-4.5 |
 | OpenRouter   | ✅     | All OpenRouter models |
 | Ollama       | ✅     | Local models |
 

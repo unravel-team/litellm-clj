@@ -59,6 +59,14 @@ A collection of practical examples for common LiteLLM use cases.
 ;; => "For beginners, I'd recommend starting with..."
 ```
 
+## Provider Examples
+
+Full provider examples live in `examples/`:
+
+- [`10_deepseek_example.clj`](../examples/10_deepseek_example.clj) - DeepSeek reasoning, JSON mode, streaming
+- [`11_kimi_example.clj`](../examples/11_kimi_example.clj) - Kimi/Moonshot thinking controls, JSON schema, streaming
+- [`12_zai_glm_example.clj`](../examples/12_zai_glm_example.clj) - Z.AI GLM reasoning, preserved thinking, streaming
+
 ## Streaming Examples
 
 ### Progressive CLI Output

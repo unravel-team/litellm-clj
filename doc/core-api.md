@@ -26,7 +26,7 @@ The primary function for making LLM requests.
 ```
 
 **Parameters:**
-- `provider` - Provider keyword (`:openai`, `:anthropic`, `:gemini`, `:mistral`, `:ollama`, `:openrouter`)
+- `provider` - Provider keyword (`:openai`, `:anthropic`, `:gemini`, `:mistral`, `:ollama`, `:openrouter`, `:deepseek`, `:kimi`, `:zai`)
 - `model` - Model name string (e.g., `"gpt-4"`, `"claude-3-opus-20240229"`)
 - `request-map` - Request parameters including `:messages`, `:temperature`, etc.
 - `config` - Optional config map with `:api-key`, `:api-base`, `:timeout`
@@ -103,6 +103,15 @@ Convenience functions for each provider:
 
 ;; OpenRouter
 (core/openrouter-completion "openai/gpt-4" {...} :api-key "sk-or-...")
+
+;; DeepSeek
+(core/deepseek-completion "deepseek-v4-pro" {...} :api-key "...")
+
+;; Kimi/Moonshot
+(core/kimi-completion "kimi-k2.6" {...} :api-key "...")
+
+;; Z.AI GLM
+(core/zai-completion "glm-5.2" {...} :api-key "...")
 ```
 
 ## Response Utilities
@@ -142,7 +151,7 @@ List all available providers.
 
 ```clojure
 (core/list-providers)
-;; => [:openai :anthropic :gemini :mistral :ollama :openrouter]
+;; => [:openai :anthropic :gemini :mistral :ollama :openrouter :deepseek :kimi :zai]
 ```
 
 ### provider-available?
@@ -180,8 +189,8 @@ Check streaming support.
 Check function calling support.
 
 ```clojure
-(core/supports-function-calling? :gemini)
-;; => false
+(core/supports-function-calling? :deepseek)
+;; => true
 ```
 
 ## Validation

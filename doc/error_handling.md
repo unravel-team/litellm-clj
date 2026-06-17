@@ -271,9 +271,17 @@ Different providers may return different error codes. The library maps these to 
 ;; Gemini
 400 -> :litellm/invalid-request
 403 -> :litellm/authorization-error
+
+;; DeepSeek / Kimi / Z.AI (OpenAI-compatible HTTP shape)
+400 -> :litellm/invalid-request
+401 -> :litellm/authentication-error
+403 -> :litellm/authorization-error
+404 -> :litellm/model-not-found
+429 -> :litellm/rate-limit or :litellm/quota-exceeded
+500-504 -> :litellm/server-error
 ```
 
-The original provider error code is preserved in `:provider-code`:
+The original provider error code is preserved in `:provider-code` when the provider includes one. Request IDs from OpenAI-compatible providers are preserved in `:request-id` when response headers include them:
 
 ```clojure
 (try

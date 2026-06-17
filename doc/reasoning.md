@@ -17,10 +17,11 @@ LiteLLM Clojure provides support for sending and receiving reasoning tokens from
 |--------------|-------------------|--------|
 | Anthropic    | ✅ Yes           | Claude 3.7 Sonnet |
 | OpenAI       | ✅ Yes           | o1, o1-mini, o1-preview |
-| Deepseek     | 🔄 Coming Soon   | deepseek-chat |
-| XAI          | 🔄 Coming Soon   | grok models |
+| DeepSeek     | ✅ Yes           | deepseek-v4-flash, deepseek-v4-pro |
+| Kimi/Moonshot| ✅ Yes           | kimi-k2.7-code, kimi-k2.6, kimi-k2.5 |
+| Z.AI GLM     | ✅ Yes           | glm-5.2, glm-5.1, glm-4.7, glm-4.5 |
 
-**Note**: Anthropic and OpenAI providers are now fully implemented. Support for other providers will be added in future releases.
+**Note**: Provider-native reasoning fields differ. `litellm-clj` normalizes common response extraction to `:reasoning-content` and preserves provider-specific request controls.
 
 ## Quick Start
 
@@ -91,15 +92,21 @@ For more control, use the `thinking` parameter:
 Controls the level of reasoning the model should apply:
 
 ```clojure
-:reasoning-effort :low     ; ~1024 tokens for thinking
-:reasoning-effort :medium  ; ~4096 tokens for thinking
-:reasoning-effort :high    ; ~10000 tokens for thinking
+:reasoning-effort :minimal ; disable or minimize where supported
+:reasoning-effort :none    ; disable where supported
+:reasoning-effort :low     ; provider-specific low/default effort
+:reasoning-effort :medium  ; provider-specific medium effort
+:reasoning-effort :high    ; high effort
+:reasoning-effort :xhigh   ; extra-high effort where supported
+:reasoning-effort :max     ; maximum effort where supported
 ```
 
 **When to use:**
+- `:minimal` / `:none` - Disable or minimize thinking where provider supports it
 - `:low` - Simple questions, quick answers
 - `:medium` - Moderate complexity problems
 - `:high` - Complex reasoning, multi-step problems
+- `:xhigh` / `:max` - Provider-specific maximum effort
 
 ### thinking
 
@@ -107,10 +114,12 @@ Provides explicit control over thinking configuration:
 
 ```clojure
 :thinking {:type :enabled
-          :budget-tokens 5000}
+          :budget-tokens 5000
+          :keep :all
+          :clear-thinking false}
 ```
 
-**Note**: `thinking` takes precedence over `reasoning-effort` when both are provided.
+**Note**: `thinking` takes precedence over `reasoning-effort` when both are provided. DeepSeek accepts `thinking.type`; Kimi accepts `thinking.type` and `thinking.keep`; Z.AI accepts `thinking.type` and `thinking.clear-thinking`. Kimi K2.7 Code cannot disable thinking.
 
 ## Response Structure
 
@@ -210,6 +219,12 @@ Reasoning content can be streamed for progressive rendering:
                      :timestamp (System/currentTimeMillis)})))
 ```
 
+## Provider Notes
+
+- **DeepSeek**: `:reasoning-effort :low` and `:medium` map to provider `high`; `:xhigh` and `:max` map to provider `max`; `:minimal` and `:none` disable thinking when no explicit `:thinking` is supplied.
+- **Kimi/Moonshot**: `:max-tokens` is sent as `max_completion_tokens`. K2.7 Code has thinking always on; disabling it raises `:litellm/invalid-request` before HTTP.
+- **Z.AI GLM**: supports `:reasoning-effort` values through `:max`, plus `:thinking {:clear-thinking false}` or top-level `:clear-thinking false` for preserved thinking. `:tool-choice` currently supports only `:auto`.
+
 ## Router API Support
 
 Reasoning works with the Router API:
@@ -267,22 +282,16 @@ Reasoning works with the Router API:
 
 ## Future Provider Support
 
-Support for additional providers is planned:
-
-- **OpenAI**: o1, o1-mini, o1-preview models
-- **Deepseek**: deepseek-chat with reasoning
-- **XAI**: Grok models
-- **Others**: As providers add reasoning capabilities
-
-The API design is provider-agnostic, so adding new providers will not require code changes in your application.
+Reasoning support is now available for Anthropic, OpenAI, DeepSeek, Kimi/Moonshot, and Z.AI GLM. Additional providers such as XAI can be added behind the same `:reasoning-content` response shape as provider APIs mature.
 
 ## API Reference
 
 ### Request Parameters
 
 ```clojure
-:reasoning-effort  ; :low | :medium | :high
-:thinking         ; {:type :enabled :budget-tokens <int>}
+:reasoning-effort  ; :minimal | :none | :low | :medium | :high | :xhigh | :max
+:thinking          ; {:type :enabled|:disabled :budget-tokens <int> :keep :all :clear-thinking false}
+:clear-thinking    ; Z.AI convenience field; nested :thinking wins
 ```
 
 ### Response Fields
@@ -294,7 +303,8 @@ The API design is provider-agnostic, so adding new providers will not require co
 
 ## Next Steps
 
-- Try the [reasoning example](../examples/08_reasoning_example.clj)
+- Try the [reasoning example](../examples/09_reasoning_example.clj)
+- See provider examples: [DeepSeek](../examples/10_deepseek_example.clj), [Kimi](../examples/11_kimi_example.clj), [Z.AI GLM](../examples/12_zai_glm_example.clj)
 - Learn about [streaming](streaming.md) reasoning content
 - Explore [error handling](error_handling.md)
 - Check [API guide](api-guide.md) for more details
