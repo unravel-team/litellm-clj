@@ -52,6 +52,11 @@ class WorkflowSecurityTest < Minitest::Test
     upload = steps.find { |step| step.fetch('uses', '').start_with?('codecov/codecov-action@') }
     refute_nil upload
     assert_equal "matrix.java == '17' && github.event_name == 'push' && github.ref == 'refs/heads/main'", upload.fetch('if')
+    settings = upload.fetch('with')
+    assert_equal true, settings.fetch('fail_ci_if_error', nil), 'CLI integrity failures must stop the uploader'
+    assert_equal true, settings.fetch('disable_search', nil), 'Upload only the specified coverage file'
+    assert_equal false, settings.fetch('use_oidc', nil), 'Do not enable unused OIDC request paths'
+    assert_match(/\Av\d+\.\d+\.\d+\z/, settings.fetch('version', ''), 'Pin the signed CLI release as well as its wrapper')
   end
 
   def test_provider_credentials_only_reach_approved_manual_main_runs

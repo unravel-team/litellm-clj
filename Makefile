@@ -1,4 +1,4 @@
-.PHONY: test-release dependency-inventory dependency-audit help repl nrepl test test-ci coverage lint clean build install deploy e2e test-streaming compile check-reflection check-clean-worktree .release-commit release-major release-minor current-version
+.PHONY: actions-audit test-release dependency-inventory dependency-audit help repl nrepl test test-ci coverage lint clean build install deploy e2e test-streaming compile check-reflection check-clean-worktree .release-commit release-major release-minor current-version
 
 # The library version is maj.min.x: maj.min lives in the VERSION file,
 # x is the git commit count at build time (see build.clj).
@@ -43,6 +43,9 @@ dependency-inventory:
 
 dependency-audit: dependency-inventory
 	ruby scripts/audit_dependencies.rb target/security/*.tsv
+
+actions-audit:
+	ruby scripts/audit_actions.rb
 
 coverage:
 	clojure -Srepro -M:test:coverage

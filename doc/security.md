@@ -72,34 +72,99 @@ It is a time-specific database result, not proof of exploit resistance.
 The existing fake-provider suite and local JAR build passed after the upgrades.
 The audit fails before the dependency repair and passes afterward.
 
-Representative advisory sources are [Clojure deserialization](https://osv.dev/vulnerability/GHSA-vr64-r9qj-h27f),
-[Logback receivers](https://osv.dev/vulnerability/GHSA-vmq6-5m68-f53m),
-[Jackson parser limits](https://osv.dev/vulnerability/GHSA-7hhh-6rmp-j9qf),
-[Plexus extraction](https://osv.dev/vulnerability/GHSA-6fmv-xxpf-w3cw), and
-[jsoup XML parsing](https://osv.dev/vulnerability/GHSA-65r4-943x-97jj).
+Representative advisory sources:
+
+- [Clojure deserialization](https://osv.dev/vulnerability/GHSA-vr64-r9qj-h27f)
+- [Logback receivers](https://osv.dev/vulnerability/GHSA-vmq6-5m68-f53m)
+- [Jackson parser limits](https://osv.dev/vulnerability/GHSA-7hhh-6rmp-j9qf)
+- [Plexus extraction](https://osv.dev/vulnerability/GHSA-6fmv-xxpf-w3cw)
+- [jsoup XML parsing](https://osv.dev/vulnerability/GHSA-65r4-943x-97jj)
 
 ## Workflow dependencies
 
-All actions use full commit IDs. Each reference includes the corresponding release version in a comment.
-The remediation checked upstream tag identities through GitHub's public ref API and inspected the action manifests at those commits:
+All actions use full commit IDs. Each reference includes the release version in a comment.
+Upstream release and tag APIs identify these commits:
 
-- [Checkout v4.2.2](https://github.com/actions/checkout/tree/11bd71901bbe5b1630ceea73d27597364c9af683)
-- [Setup Java v4.7.1](https://github.com/actions/setup-java/tree/c5195efecf7bdfc987ee8bae7a71cb8b11521c00)
-- [Setup Clojure 12.5](https://github.com/DeLaGuardo/setup-clojure/tree/bc7570e912b028bbcc22f457adec7fdf98e2f4ed)
-- [Cache v4.2.3](https://github.com/actions/cache/tree/5a3ec84eff668545956fd18022155c47e93e2684)
+- [Checkout v7.0.1](https://github.com/actions/checkout/tree/3d3c42e5aac5ba805825da76410c181273ba90b1)
+- [Setup Java v6.1.0](https://github.com/actions/setup-java/tree/b843ebf9b913146b38da2eaa7aeddf76074ae1ad)
+- [Setup Clojure 13.7.0](https://github.com/DeLaGuardo/setup-clojure/tree/6d46099eae24853c33c0482f2bb54edf4f1a4c74)
+- [Upload artifact v7.0.2](https://github.com/actions/upload-artifact/tree/cf430e030ddbb5b0abf93d22962f4752f3646cd9)
 - [Codecov v4.6.0](https://github.com/codecov/codecov-action/tree/b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238)
-- [Upload artifact v4.6.2](https://github.com/actions/upload-artifact/tree/ea165f8d65b6e75b540449e92b4886f43607fa02)
 
-Manifest review establishes declared inputs and entry points, not a complete audit of bundled JavaScript or downloaded tools.
 Workflows grant only `contents: read`. Checkout does not persist credentials.
-Dependabot proposes action updates weekly. Review upstream changes and bundled dependencies before accepting each new commit ID.
+Dependabot proposes action updates weekly. Review upstream changes and dependencies before accepting each new commit ID.
 Do not replace commit IDs with mutable tags.
 
+Run `make actions-audit` to read the pinned manifests, entry-point bundles, and upstream npm lockfiles.
+It records manifest, bundle, and lockfile SHA-256 digests and queries OSV for runtime npm package versions.
+Lockfiles stay in memory. The command does not install packages, run action code, or modify lockfiles.
+It writes `target/security/actions.json` and exits nonzero on advisory matches or incomplete responses.
+Composite and Docker actions need a separate audit. This command refuses them.
+
+The [initial report](security/action-audit/initial.json) matched 34 of 236 runtime npm package versions.
+After upgrading four actions, the [assessed report](security/action-audit/assessed.json) matches 23 of 217.
+**The GitHub Actions dependency audit is not clean.**
+Even the four current upstream releases retain advisory matches.
+A source lockfile graph can include code absent from the built bundle. A bundle digest does not prove that code is safe.
+This review is not a complete audit of bundled JavaScript, downloaded JDKs, the Clojure installer, or the Codecov CLI.
+
+### Codecov token boundary and remaining matches
+
 The unit workflow uploads to Codecov only for push events on main, on JDK 17.
-Only that upload step receives `CODECOV_TOKEN`. Pull-request jobs receive no Codecov token.
-Both pull-request and main jobs retain the coverage report as a GitHub artifact for seven days.
-Jeeves chose to preserve the existing Codecov service and its history rather than remove it.
-The Codecov tag resolves through an annotated tag to the pinned commit. Its manifest was inspected, but its downloaded uploader remains a separate supply-chain boundary.
+Only that step receives `CODECOV_TOKEN`. Pull-request jobs receive no Codecov token.
+Both pull-request and main jobs retain coverage as a GitHub artifact for seven days.
+Artifact retention runs before the Codecov step, so an upload failure does not discard that fallback.
+The upload step has a five-minute limit, disables report search and OIDC, and specifies only `target/coverage/codecov.json`.
+It pins the downloaded CLI to `v11.3.2`. That release still exposes the three commands used by the v4 wrapper.
+CLI checksum or GPG signature failures stop the action because `fail_ci_if_error` is true.
+
+Jeeves chose to keep the Codecov service, its history, and the reviewed v4 Node wrapper.
+The current v7 composite wrapper [exports its token through GITHUB_ENV](https://github.com/codecov/codecov-action/blob/303a32d7a59b442fa8d48b6a1cc6825c09c847a5/action.yml).
+This exports the token to later job steps.
+The v4 [argument builder](https://github.com/codecov/codecov-action/blob/b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238/src/buildExec.ts) passes it to CLI child processes instead.
+Do not upgrade this wrapper without checking the token boundary again.
+
+The v4 graph has six advisory-matched package versions. The assessment is specific to the workflow above:
+
+- `@octokit/plugin-paginate-rest 9.0.0`, `@octokit/request 8.1.4`, and `@octokit/request-error 5.0.1` have regular-expression denial-of-service advisories.
+  The wrapper uses `github.context` to read local event data. It does not create an Octokit client or make pagination/API calls.
+  The vulnerable response/header parsing paths are not used by the reviewed caller.
+  See [pagination](https://osv.dev/vulnerability/GHSA-h5c3-5r3r-rr8q), [request](https://osv.dev/vulnerability/GHSA-rmvr-2pp2-xj38), and [request error](https://osv.dev/vulnerability/GHSA-xx4v-prfh-6cgc).
+- `@fastify/busboy 2.1.1` has multipart header parsing advisories.
+  The wrapper reads checksum and signature responses as text, not multipart form data. It does not use parsed upload filenames.
+  See [multipart injection](https://osv.dev/vulnerability/GHSA-gxm5-99cw-xjw9).
+- `uuid 8.3.2` has a buffer-bounds advisory for v3/v5/v6 calls.
+  The reviewed wrapper does not call those methods with caller-provided output buffers.
+  See [UUID buffer bounds](https://osv.dev/vulnerability/GHSA-w5hq-g745-h8pq).
+- `undici 5.28.4` is directly reachable in [CLI verification](https://github.com/codecov/codecov-action/blob/b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238/src/validate.ts).
+  It makes GET requests for the checksum and signature at fixed `https://cli.codecov.io/v11.3.2/linux/` paths.
+  The caller uses no multipart body, caller-supplied headers, WebSocket, cookie forwarding, retry interceptor, custom TLS callback, or HTTP proxy server.
+  Those feature-specific advisory paths are absent. This does **not** make every Undici match unreachable.
+  A compromised trusted HTTPS endpoint can still cause client denial of service through connection reuse or TLS renegotiation.
+  See [response queue poisoning](https://osv.dev/vulnerability/GHSA-35p6-xmwp-9g52) and [TLS renegotiation](https://osv.dev/vulnerability/GHSA-qrxm-fqhp-jwvm).
+
+The reviewed [entry point](https://github.com/codecov/codecov-action/blob/b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238/src/index.ts) downloads the CLI through Node HTTPS, then verifies it before execution.
+The signed CLI is a separate executable and trust boundary, not covered by the npm graph audit.
+No Codecov action or uploader was executed locally during remediation.
+
+### Other action matches
+
+The four upgraded actions use Node 24. Their remaining matches are recorded without suppression:
+
+- Setup Clojure: `brace-expansion 1.1.14`, `minimatch 3.1.5`, `undici 6.25.0`.
+- Checkout: `undici 6.27.0`.
+- Setup Java: `minimatch 10.2.6`, `undici 6.29.0`.
+- Upload artifact: brace-expansion, minimatch, glob, lodash, XML parser/builder, and Undici versions listed in the assessed report.
+
+Workflow inputs use fixed tool versions, fixed artifact paths, and a fixed Java matrix, not pull-request titles or caller-supplied patterns.
+That limits attacker control over glob and parser inputs, but is not proof that every transitive path is unreachable.
+Download and artifact services remain trusted network peers. Server-triggered client denial of service remains possible.
+Pull-request jobs have no provider or Codecov credentials. Their job token is read-only and is not persisted by checkout.
+The manual provider E2E job is a separate, human-approved credential boundary described below.
+
+Keep these upstream findings visible. Re-run the audit for each proposed action update.
+When a reviewed upstream release fixes these findings, replace the affected versions.
+Do not describe the Maven audit's zero matches as a result for GitHub Actions.
 
 ## Logs
 

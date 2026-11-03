@@ -21,18 +21,18 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       
       - name: Setup Java
-        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: 'temurin'
           java-version: ${{ matrix.java }}
       
       - name: Install Clojure tools
-        uses: DeLaGuardo/setup-clojure@bc7570e912b028bbcc22f457adec7fdf98e2f4ed # 12.5
+        uses: DeLaGuardo/setup-clojure@6d46099eae24853c33c0482f2bb54edf4f1a4c74 # 13.7.0
         with:
           cli: 1.11.1.1413
       
@@ -53,18 +53,22 @@ jobs:
         if: matrix.java == '17'
         run: clojure -Srepro -M:test:coverage
       
-      - name: Upload coverage to Codecov (main pushes only)
-        if: matrix.java == '17' && github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
-        with:
-          files: ./target/coverage/codecov.json
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
-
       - name: Retain coverage report (JDK 17 only)
         if: matrix.java == '17'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage
           path: target/coverage/
           retention-days: 7
+
+      - name: Upload coverage to Codecov (main pushes only)
+        if: matrix.java == '17' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
+        timeout-minutes: 5
+        with:
+          files: ./target/coverage/codecov.json
+          disable_search: true
+          use_oidc: false
+          version: v11.3.2
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
