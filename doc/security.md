@@ -209,3 +209,9 @@ Revoke them at each provider, review usage and billing, then issue replacement t
 Remove old repository or organization secrets before storing replacements in the protected environment.
 Review retained workflow logs and artifacts for disclosures. Limit access or remove exposed artifacts under the owner's incident process.
 Credential rotation and GitHub environment setup require owner action. Local code changes do not perform them.
+
+## Verification evidence
+
+The [post-remediation report](security/verification.md) records the disposable macOS run, source revision, commands, inventories, file/process observations, and limitations.
+Its offline gates pass. The separate action advisory audit retains known matches and is not described as clean.
+Real providers, hosted CI, credential rotation, environment protection, and publication were not exercised.

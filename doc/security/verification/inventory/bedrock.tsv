@@ -1,0 +1,33 @@
+coordinate	version	artifact	sha256	dependents
+borkdude/dynaload	0.3.5	dynaload-0.3.5.jar	0887c0cdb9afcecd7c496ea258a32e43aa72e766f3f0632e1bd0f5245ca8c24c	metosin/malli
+borkdude/edamame	1.3.23	edamame-1.3.23.jar	9e6e81999eba0bfcf70fad4c9710354da355dfb9d2400c1ea4ba462bd4eff550	metosin/malli
+ch.qos.logback/logback-classic	1.5.38	logback-classic-1.5.38.jar	afb439c61fa287c9e1925523b13baab03617e724406a389d48b61c2c3e46b700	
+ch.qos.logback/logback-core	1.5.38	logback-core-1.5.38.jar	a855a0fc97b1d06f4efb1c3bba5ebd0eb508d8b58e68e89e4bbc23a85135c883	ch.qos.logback/logback-classic
+cheshire/cheshire	6.2.1	cheshire-6.2.1.jar	b71bc650eb471060b6f7bcb17cc9b84e9cfa0c5757e5c5450478189c2d31a1ad	
+com.cognitect.aws/api	0.8.847	api-0.8.847.jar	48778caab3bb756ad75f2b2af78f07f3e08fd61685c64fc7e00f0c55d1aae40d	
+com.cognitect.aws/bedrock-runtime	871.2.32.2	bedrock-runtime-871.2.32.2.jar	2bf43a0f3d3eb654d3a66f59f933b58620ce9d8d85fc0cdb56333ea4eb5c4187	
+com.cognitect.aws/endpoints	1.1.12.772	endpoints-1.1.12.772.jar	342ffedc7ec9da624c9e8b9cead7fe3b515fbfb55603a656e0f6098519db0aee	
+com.fasterxml.jackson.core/jackson-core	2.21.8	jackson-core-2.21.8.jar	604ef7765013daf5cde192e40bc4c8412c4ca93f4aaf7bf8e9a62fad1e1026bb	cheshire/cheshire,com.fasterxml.jackson.dataformat/jackson-dataformat-cbor,com.fasterxml.jackson.dataformat/jackson-dataformat-smile
+com.fasterxml.jackson.dataformat/jackson-dataformat-cbor	2.21.8	jackson-dataformat-cbor-2.21.8.jar	e0adc690d27aa73a7563726c9ed5d33c018f3eb6f16a0f139d315b54f71b53fa	cheshire/cheshire
+com.fasterxml.jackson.dataformat/jackson-dataformat-smile	2.21.8	jackson-dataformat-smile-2.21.8.jar	bfb990ea7681b3084db5c4d5a294ad69e7bdcab9577f9522849faac81218f570	cheshire/cheshire
+fipp/fipp	0.6.26	fipp-0.6.26.jar	f7cb696cce55afd74c838d5441419c7e5f6d491af185a8e563dfa79796857283	metosin/malli
+hato/hato	0.9.0	hato-0.9.0.jar	5e798c88abc14aaf3f6664dfdc2677b2d5ad366d000df8714adbba0dfcd00c9b	
+metosin/malli	0.13.0	malli-0.13.0.jar	bf3549eca293b4704314fa9920856387987adea3dc09303827b258ca4c4b586d	
+mvxcvi/arrangement	2.1.0	arrangement-2.1.0.jar	f37251385d220df8951e68d5255abb5197adbcbd8fc6b3d3fca872a2339f39c8	metosin/malli
+org.clojure/clojure	1.12.6	clojure-1.12.6.jar	21b578db389a8e74b286ce79c4a7f86ec641e26d88b12f18d69030916b0e18ca	
+org.clojure/core.async	1.6.681	core.async-1.6.681.jar	2e9160118c381d418ab1c4d330b6323ff76b7947e6e2d9b1cd1be950fd269d9f	
+org.clojure/core.cache	1.0.225	core.cache-1.0.225.jar	c153aa947eda5cdbd8a93882c8fbabd5037d4ad7311802b4bcd8015469f6a5b1	org.clojure/core.memoize
+org.clojure/core.memoize	1.0.253	core.memoize-1.0.253.jar	4a910585182ab326c1d0a20d34315be1563b5a58437d41c021dd7fe9911e1ed6	org.clojure/tools.analyzer.jvm
+org.clojure/core.rrb-vector	0.1.2	core.rrb-vector-0.1.2.jar	51f98eba7b2cd42ee30f3826925dcde8791167f76f712329ae51b88244e8138e	fipp/fipp
+org.clojure/core.specs.alpha	0.4.74	core.specs.alpha-0.4.74.jar	eb73ac08cf49ba840c88ba67beef11336ca554333d9408808d78946e0feb9ddb	org.clojure/clojure
+org.clojure/data.json	2.5.2	data.json-2.5.2.jar	0938c730961d32b331ea7e5cd7c6a822c0a889def79d1c3f2af4dd201fdddeb3	com.cognitect.aws/api
+org.clojure/data.priority-map	1.1.0	data.priority-map-1.1.0.jar	fe51af4472fa0f1bfd66f3871de55076402ff6615a74bcb17b37c402a0ea6f4c	org.clojure/core.cache
+org.clojure/spec.alpha	0.5.238	spec.alpha-0.5.238.jar	94cd99b6ea639641f37af4860a643b6ed399ee5a8be5d717cff0b663c8d75077	org.clojure/clojure
+org.clojure/test.check	1.1.1	test.check-1.1.1.jar	945118163b2c355a5fab96c9ebd01287152555bb2e9641f5cd9ed07fe4bc5078	metosin/malli
+org.clojure/tools.analyzer	1.1.1	tools.analyzer-1.1.1.jar	eba167fca1179fb156a8e38bdc2e9d49dff491e5150965b54839b952fceed060	org.clojure/tools.analyzer.jvm
+org.clojure/tools.analyzer.jvm	1.2.3	tools.analyzer.jvm-1.2.3.jar	86332ef629ede50e1ad910dfb835e4cf3427073cfab2907e52b9ab2fb2f61416	org.clojure/core.async
+org.clojure/tools.logging	1.2.4	tools.logging-1.2.4.jar	46fe0a3cd0234980be7fed8e437b1de107beaea4953194be8f71ba3b048f1929	
+org.clojure/tools.reader	1.3.6	tools.reader-1.3.6.jar	11d1b31f2c65c3355b292bb9b44b8fcafda54b44da63e34ab97b79a8ab3bb8e0	org.clojure/tools.analyzer.jvm
+org.ow2.asm/asm	9.2	asm-9.2.jar	b9d4fe4d71938df38839f0eca42aaaa64cf8b313d678da036f0cb3ca199b47f5	org.clojure/tools.analyzer.jvm
+org.slf4j/slf4j-api	2.0.17	slf4j-api-2.0.17.jar	7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832	ch.qos.logback/logback-classic
+tigris/tigris	0.1.2	tigris-0.1.2.jar	49aa648edb6c14e57095a11b391eaee606578323fb79755f92331ac6300f97a0	cheshire/cheshire

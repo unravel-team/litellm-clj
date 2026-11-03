@@ -1,0 +1,27 @@
+coordinate	version	artifact	sha256	dependents
+babashka/fs	0.5.31	fs-0.5.31.jar	67061f1ee9b2a31f6ea0bb355b74e81a29799e0ea33b0189e1c18c25714c2909	clj-kondo/clj-kondo
+borkdude/edamame	1.6.44	edamame-1.6.44.jar	0a7e5d8d91146b7bed6ef5aefcf3010376de4721aeb45c86439a8767bf892810	org.babashka/sci
+borkdude/graal.locking	0.0.2	graal.locking-0.0.2.jar	7859697555c154d72030ceb34534cfbaa70ac4b58984041d37850b53bdf7145e	org.babashka/sci
+cheshire/cheshire	6.2.1	cheshire-6.2.1.jar	b71bc650eb471060b6f7bcb17cc9b84e9cfa0c5757e5c5450478189c2d31a1ad	
+clj-kondo/clj-kondo	2026.10.26	clj-kondo-2026.10.26.jar	b24638f4c7a870ed3cafa2be3efb028713f8f7aef389ba8aaa4970df8dbae157	
+com.cognitect/transit-clj	1.0.333	transit-clj-1.0.333.jar	8e0352a002cf95ddeb52770b950c1eb5ea96b7351fce39e0fee93e21ca63befb	clj-kondo/clj-kondo
+com.cognitect/transit-java	1.0.371	transit-java-1.0.371.jar	9267acceaa6bc8e89d5cbf65f847838647876d721af208324e38cd0040b23696	com.cognitect/transit-clj
+com.fasterxml.jackson.core/jackson-core	2.21.8	jackson-core-2.21.8.jar	604ef7765013daf5cde192e40bc4c8412c4ca93f4aaf7bf8e9a62fad1e1026bb	cheshire/cheshire,com.fasterxml.jackson.dataformat/jackson-dataformat-cbor,com.fasterxml.jackson.dataformat/jackson-dataformat-smile
+com.fasterxml.jackson.dataformat/jackson-dataformat-cbor	2.21.8	jackson-dataformat-cbor-2.21.8.jar	e0adc690d27aa73a7563726c9ed5d33c018f3eb6f16a0f139d315b54f71b53fa	cheshire/cheshire
+com.fasterxml.jackson.dataformat/jackson-dataformat-smile	2.21.8	jackson-dataformat-smile-2.21.8.jar	bfb990ea7681b3084db5c4d5a294ad69e7bdcab9577f9522849faac81218f570	cheshire/cheshire
+com.github.javaparser/javaparser-core	3.26.1	javaparser-core-3.26.1.jar	6781afe827b51f6e1d2b4b0171777fe6f14dc56bde15d7cbb62d88176c4b795f	clj-kondo/clj-kondo
+com.googlecode.json-simple/json-simple	1.1.1	json-simple-1.1.1.jar	4e69696892b88b41c55d49ab2fdcc21eead92bf54acc588c0050596c3b75199c	org.msgpack/msgpack
+javax.activation/javax.activation-api	1.2.0	javax.activation-api-1.2.0.jar	43fdef0b5b6ceb31b0424b208b930c74ab58fac2ceeb7b3f6fd3aeb8b5ca4393	javax.xml.bind/jaxb-api
+javax.xml.bind/jaxb-api	2.4.0-b180830.0359	jaxb-api-2.4.0-b180830.0359.jar	56b9e9702753763007435162ea788055efcfefc86ab920f032c0411dc547b836	com.cognitect/transit-java
+nrepl/bencode	1.2.0	bencode-1.2.0.jar	8422956bb01c5efdc5866407ccd70b9e7b0b14da910a35a9ab733ea3e528fb85	clj-kondo/clj-kondo
+org.babashka/sci	0.15.59	sci-0.15.59.jar	f031b76774c5cb970b4b1f652fccadff5cba89be1b0ade5d32a9f3bd660fd0da	clj-kondo/clj-kondo
+org.babashka/sci.impl.types	0.0.3	sci.impl.types-0.0.3.jar	d331dba0e0738c381d737f18525070e75b63f3f67efc88d3450db00c755fe6de	org.babashka/sci
+org.clojure/clojure	1.12.6	clojure-1.12.6.jar	21b578db389a8e74b286ce79c4a7f86ec641e26d88b12f18d69030916b0e18ca	
+org.clojure/core.specs.alpha	0.4.74	core.specs.alpha-0.4.74.jar	eb73ac08cf49ba840c88ba67beef11336ca554333d9408808d78946e0feb9ddb	org.clojure/clojure
+org.clojure/spec.alpha	0.5.238	spec.alpha-0.5.238.jar	94cd99b6ea639641f37af4860a643b6ed399ee5a8be5d717cff0b663c8d75077	org.clojure/clojure
+org.clojure/tools.reader	1.5.2	tools.reader-1.5.2.jar	cb96ed0efdf0b8bc362632cb74067ef225f6b03f3f478c8ba44182f6a17a37b6	borkdude/edamame
+org.javassist/javassist	3.18.1-GA	javassist-3.18.1-GA.jar	3fb71231afd098bb0f93f5eb97aa8291c8d0556379125e596f92ec8f944c6162	org.msgpack/msgpack
+org.msgpack/msgpack	0.6.12	msgpack-0.6.12.jar	e09ca65d8520488e80a5dc426848a8afccfd40f4a2eb3b9646042595d3bd9b5e	com.cognitect/transit-java
+org.ow2.asm/asm	9.10.1	asm-9.10.1.jar	ed825d10ab1399c8c0cb669e688cf0c8c82629b4c8399b58352b68e92ca10fcb	clj-kondo/clj-kondo
+org.replikativ/datalog-parser	0.2.43	datalog-parser-0.2.43.jar	abf01c8470a84c541f3d34cc1b1bc8d8cc6fa7fe24b43ce86aca4ae73cad675f	clj-kondo/clj-kondo
+tigris/tigris	0.1.2	tigris-0.1.2.jar	49aa648edb6c14e57095a11b391eaee606578323fb79755f92331ac6300f97a0	cheshire/cheshire
