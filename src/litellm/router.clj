@@ -86,11 +86,8 @@
   (let [resolved (config/resolve-config config-name request-map)
         provider (:provider resolved)
         model (:model resolved)
-        provider-config (:config resolved)
-        full-request (merge request-map
-                           (when provider-config
-                             (select-keys provider-config [:api-key :api-base])))]
-    (core/completion provider model full-request provider-config)))
+        provider-config (:config resolved)]
+    (core/completion provider model request-map provider-config)))
 
 (defn chat
   "Simple chat completion using registered configuration.

@@ -39,6 +39,23 @@
 ;; Core Completion API
 ;; ============================================================================
 
+(defn- request-config
+  "Keep destination selection in trusted application configuration, never request data."
+  [request config]
+  (when (contains? request :api-base)
+    (throw (errors/invalid-request "API endpoints belong in trusted configuration, not request data")))
+  (when-let [base (:api-base config)]
+    (when-not (try
+                (let [uri (java.net.URI. ^String base)]
+                  (and (#{"https" "http"} (.getScheme uri))
+                       (seq (.getHost uri))
+                       (nil? (.getUserInfo uri))
+                       (nil? (.getRawQuery uri))
+                       (nil? (.getRawFragment uri))))
+                (catch Exception _ false))
+      (throw (errors/invalid-config "Invalid API base in trusted configuration"))))
+  (merge (select-keys request [:api-key :timeout]) config))
+
 (defn completion
   "Direct completion function - accepts `provider` keyword and `model` name as-is.
   
@@ -87,7 +104,8 @@
               :available-providers (list-providers))))
    
    ;; Build full request with model
-   (let [request (assoc request-map :model model)]
+   (let [request (assoc request-map :model model)
+         config (request-config request config)]
      
      ;; Validate request
      (providers/validate-request provider-name request)
@@ -96,13 +114,13 @@
      (if (:stream request)
        ;; Streaming request - return channel
        (let [;; Merge API key and other request params into config
-             merged-config (merge config (select-keys request [:api-key :api-base :timeout]))
+             merged-config config
              transformed-request (providers/transform-request provider-name request merged-config)]
          (providers/make-streaming-request provider-name transformed-request nil merged-config))
        
        ;; Non-streaming request - use the provider's make-request
        (let [;; Merge API key and other request params into config
-             merged-config (merge config (select-keys request [:api-key :api-base :timeout]))
+             merged-config config
              transformed-request (providers/transform-request provider-name request merged-config)
              response-future (providers/make-request provider-name transformed-request nil nil merged-config)
              response @response-future]  ; Block and wait for response
@@ -194,13 +212,14 @@
               :available-providers (list-providers))))
    
    ;; Build full request with model
-   (let [request (assoc request-map :model model)]
+   (let [request (assoc request-map :model model)
+         config (request-config request config)]
      
      ;; Validate embedding request
      (providers/validate-embedding-request provider-name request)
      
      ;; Merge API key and other request params into config
-     (let [merged-config (merge config (select-keys request [:api-key :api-base :timeout]))
+     (let [merged-config config
            transformed-request (providers/transform-embedding-request provider-name request merged-config)
            response-future (providers/make-embedding-request provider-name transformed-request nil nil merged-config)
            response @response-future]  ; Block and wait for response
