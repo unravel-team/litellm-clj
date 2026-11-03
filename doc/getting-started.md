@@ -164,4 +164,4 @@ Then use `quick-setup!`:
 
 - 📖 Check the [API Guide](/doc/api-guide.md)
 - 💻 Browse [examples](/doc/examples.md)
-- 🐛 Report issues on [GitHub](https://github.com/unravel-team/clj-litellm/issues)
+- 🐛 Report issues on [GitHub](https://github.com/unravel-team/litellm-clj/issues)

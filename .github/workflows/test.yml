@@ -45,6 +45,10 @@ jobs:
       - name: Run tests
         run: make test
       
+      - name: Test artifact provenance (JDK 17 only)
+        if: matrix.java == '17'
+        run: make test-release
+
       - name: Generate coverage report (JDK 17 only)
         if: matrix.java == '17'
         run: clojure -Srepro -M:test:coverage

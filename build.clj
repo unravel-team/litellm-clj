@@ -1,8 +1,11 @@
 (ns build
   (:require [clojure.string :as str]
+            [clojure.java.io :as io]
             [clojure.tools.build.api :as b]))
 
 (def lib 'tech.unravel/litellm-clj)
+(def repository-url "https://github.com/unravel-team/litellm-clj")
+(def source-revision (b/git-process {:git-args ["rev-parse" "HEAD"]}))
 ;; The version is maj.min.x: maj.min comes from the VERSION file (bump it
 ;; with `make release-major` / `make release-minor`), x is the number of git
 ;; commits at build time.
@@ -22,12 +25,12 @@
                 :version version
                 :basis basis
                 :src-dirs ["src"]
-                :scm {:url "https://github.com/unravel-team/clj-litellm"
-                      :connection "scm:git:git://github.com/unravel-team/clj-litellm.git"
-                      :developerConnection "scm:git:ssh://git@github.com/unravel-team/clj-litellm.git"
-                      :tag (str "v" version)}
+                :scm {:url repository-url
+                      :connection (str "scm:git:" repository-url ".git")
+                      :developerConnection (str "scm:git:" repository-url ".git")
+                      :tag source-revision}
                 :pom-data [[:description "A Clojure port of LiteLLM providing a unified interface for multiple LLM providers"]
-                           [:url "https://github.com/unravel-team/clj-litellm"]
+                           [:url repository-url]
                            [:licenses
                             [:license
                              [:name "MIT License"]
@@ -37,6 +40,13 @@
                              [:name "Unravel Team"]]]]})
   (b/copy-dir {:src-dirs ["src" "resources"]
                :target-dir class-dir})
+  (let [metadata-file (io/file class-dir "META-INF/litellm-clj/build-info.edn")]
+    (io/make-parents metadata-file)
+    (spit metadata-file
+          (pr-str {:repository repository-url
+                   :revision source-revision
+                   :version version
+                   :dirty? (boolean (seq (b/git-process {:git-args ["status" "--porcelain"]})))})))
   (b/jar {:class-dir class-dir
           :jar-file jar-file})
   (println "Built" jar-file))

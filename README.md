@@ -4,8 +4,8 @@ A Clojure port of the popular [LiteLLM](https://github.com/BerriAI/litellm) libr
 
 [![Clojars Project](https://img.shields.io/clojars/v/tech.unravel/litellm-clj.svg)](https://clojars.org/tech.unravel/litellm-clj)
 [![cljdoc](https://cljdoc.org/badge/tech.unravel/litellm-clj)](https://cljdoc.org/d/tech.unravel/litellm-clj)
-[![Continuous Integration Tests](https://github.com/unravel-team/clj-litellm/actions/workflows/test.yml/badge.svg)](https://github.com/unravel-team/clj-litellm/actions/workflows/test.yml)
-[![Lint](https://github.com/unravel-team/clj-litellm/actions/workflows/lint.yml/badge.svg)](https://github.com/unravel-team/clj-litellm/actions/workflows/lint.yml)
+[![Continuous Integration Tests](https://github.com/unravel-team/litellm-clj/actions/workflows/test.yml/badge.svg)](https://github.com/unravel-team/litellm-clj/actions/workflows/test.yml)
+[![Lint](https://github.com/unravel-team/litellm-clj/actions/workflows/lint.yml/badge.svg)](https://github.com/unravel-team/litellm-clj/actions/workflows/lint.yml)
 
 ---
 
@@ -68,7 +68,7 @@ To use Bedrock, add the following to your `deps.edn`:
 {:deps {tech.unravel/litellm-clj {:mvn/version "0.3.0-alpha.2"}
 
         ;; AWS Bedrock dependencies
-        com.cognitect.aws/api {:mvn/version "0.8.692"}
+        com.cognitect.aws/api {:mvn/version "0.8.847"}
         com.cognitect.aws/endpoints {:mvn/version "1.1.12.772"}
         com.cognitect.aws/bedrock-runtime {:mvn/version "871.2.32.2"}}}
 ```

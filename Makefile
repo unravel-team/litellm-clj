@@ -1,4 +1,4 @@
-.PHONY: dependency-inventory dependency-audit help repl nrepl test test-ci coverage lint clean build install deploy e2e test-streaming compile check-reflection check-clean-worktree .release-commit release-major release-minor current-version
+.PHONY: test-release dependency-inventory dependency-audit help repl nrepl test test-ci coverage lint clean build install deploy e2e test-streaming compile check-reflection check-clean-worktree .release-commit release-major release-minor current-version
 
 # The library version is maj.min.x: maj.min lives in the VERSION file,
 # x is the git commit count at build time (see build.clj).
@@ -99,6 +99,9 @@ release-minor: check-clean-worktree
 
 current-version:
 	@echo "$$(cat $(VERSION_FILE)).$$(git rev-list --count HEAD 2>/dev/null || echo '?')"
+
+test-release: build
+	ruby test/security/release_test.rb
 
 build:
 	clojure -Srepro -T:build jar
