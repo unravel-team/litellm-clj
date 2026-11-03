@@ -10,7 +10,12 @@
   (f)
   (router/clear-router!))
 
-(use-fixtures :each litellm.offline/guard clear-registry-fixture)
+(defn fake-env-fixture [f]
+  (with-redefs [litellm.router/env (fn [_]
+                                   (throw (ex-info "Router tests must supply a fake environment" {})))]
+    (f)))
+
+(use-fixtures :each litellm.offline/guard fake-env-fixture clear-registry-fixture)
 
 ;; ============================================================================
 ;; Configuration Management Tests
@@ -101,24 +106,16 @@
       (is (= "gpt-4o-mini" (:model config))))))
 
 (deftest test-setup-openai-from-env
-  (testing "Setup OpenAI from environment variable"
-    (if (System/getenv "OPENAI_API_KEY")
-      (do
-        (router/setup-openai!)
-        (let [config (router/get-config :openai)]
-          (is (some? config))
-          (is (= :openai (:provider config)))))
-      ;; If env var not set, just verify we have a test
-      (is true "Skipping test - no OPENAI_API_KEY env var"))))
+  (with-redefs [litellm.router/env {"OPENAI_API_KEY" "fake-environment-key"}]
+    (router/setup-openai!)
+    (let [config (router/get-config :openai)]
+      (is (= :openai (:provider config)))
+      (is (= "fake-environment-key" (get-in config [:config :api-key]))))))
 
 (deftest test-setup-openai-missing-key
-  (testing "Setup OpenAI fails without API key or env var"
-    (if (System/getenv "OPENAI_API_KEY")
-      ;; If env var is set, we can't test the failure case
-      (is true "Skipping test - OPENAI_API_KEY env var is set")
-      ;; If env var is not set, test that setup fails
-      (is (thrown-with-msg? Exception #"OpenAI API key"
-                            (router/setup-openai!))))))
+  (with-redefs [litellm.router/env {}]
+    (is (thrown-with-msg? Exception #"OpenAI API key"
+                          (router/setup-openai!)))))
 
 (deftest test-setup-anthropic
   (testing "Setup Anthropic with explicit API key"
@@ -220,16 +217,13 @@
       (is (= "test-key" (get-in config [:config :api-key]))))))
 
 (deftest test-quick-setup
-  (testing "Quick setup registers available providers"
+  (with-redefs [litellm.router/env {"OPENAI_API_KEY" "fake-openai"
+                                  "ANTHROPIC_API_KEY" "fake-anthropic"}]
     (router/quick-setup!)
-    (let [configs (router/list-configs)]
-      ;; Ollama should always be registered
-      (is (contains? (set configs) :ollama))
-      ;; Other providers only if env vars are set
-      (when (System/getenv "OPENAI_API_KEY")
-        (is (contains? (set configs) :openai)))
-      (when (System/getenv "ANTHROPIC_API_KEY")
-        (is (contains? (set configs) :anthropic))))))
+    (let [configs (set (router/list-configs))]
+      (is (= #{:ollama :openai :anthropic} configs))
+      (is (= "fake-openai" (get-in (router/get-config :openai) [:config :api-key])))
+      (is (= "fake-anthropic" (get-in (router/get-config :anthropic) [:config :api-key]))))))
 
 (deftest test-quick-setup-new-providers-from-env
   (testing "Quick setup registers DeepSeek, Kimi, and Z.AI when env vars exist"
