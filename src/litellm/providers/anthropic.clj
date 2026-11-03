@@ -235,6 +235,7 @@
                          :else nil)
         transformed {:model mapped-model
                      :max_tokens (:max-tokens request 1024)
+                     :messages (:messages messages-data)
                      :stream (:stream request false)}]
     
     ;; Add system prompt, messages, tools, thinking if present
@@ -244,7 +245,6 @@
       (and has-top-p? (not has-temperature?)) (assoc :top_p (:top-p request))
       (and (not has-temperature?) (not has-top-p?)) (assoc :temperature 1.0)
       (:system messages-data) (assoc :system (:system messages-data))
-      (:messages messages-data) (assoc :messages (:messages messages-data))
       (:tools request) (assoc :tools (transform-tools (:tools request)))
       (:tool-choice request) (assoc :tool_choice (transform-tool-choice (:tool-choice request)))
       thinking-param (assoc :thinking thinking-param))))

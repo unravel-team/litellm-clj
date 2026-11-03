@@ -58,7 +58,25 @@ The initial audit covered 217 distinct package versions and found matches for 19
 The stored report is [dependency-audit-initial.json](security/dependency-audit-initial.json).
 Runtime matches include Logback 1.4.11, Jackson Core 2.15.2, and Clojure 1.11.1.
 Build and optional tooling also resolve old Jackson Databind, AWS SDK v1, Ion, jsoup, Jetty, Guava, Commons, and Plexus versions.
-These findings require follow-up remediation or explicit assessment. Reproducibility does not make those versions safe.
+Follow-up issue `.10` upgraded runtime Clojure to 1.12.6, Logback to 1.5.38, and Cheshire to 6.2.1 with Jackson 2.21.8.
+It upgraded tools.build, deps-deploy, clj-kondo, and Cognitect AWS API.
+Build-only pins patch the deploy tool's AWS SDK v1, Jackson, jsoup, and logging chain.
+The antq alias uses current tools.deps to remove the older Jetty, Plexus, and Commons chain.
+The clj-kondo alias uses the patched Cheshire parser. Tool aliases explicitly pin Clojure rather than inherit the CLI's bundled version.
+No S3 deploy capability was removed. The deploy tool's redundant SLF4J no-op backend is excluded in favor of the patched Logback backend.
+
+The final audit covered 190 distinct package versions with zero OSV matches.
+Its report is [dependency-audit-remediated.json](security/dependency-audit-remediated.json).
+This result covers the seven inventoried graphs, not every optional REPL or developer alias, native executable, or GitHub Action bundle.
+It is a time-specific database result, not proof of exploit resistance.
+The existing fake-provider suite and local JAR build passed after the upgrades.
+The audit fails before the dependency repair and passes afterward.
+
+Representative advisory sources are [Clojure deserialization](https://osv.dev/vulnerability/GHSA-vr64-r9qj-h27f),
+[Logback receivers](https://osv.dev/vulnerability/GHSA-vmq6-5m68-f53m),
+[Jackson parser limits](https://osv.dev/vulnerability/GHSA-7hhh-6rmp-j9qf),
+[Plexus extraction](https://osv.dev/vulnerability/GHSA-6fmv-xxpf-w3cw), and
+[jsoup XML parsing](https://osv.dev/vulnerability/GHSA-65r4-943x-97jj).
 
 ## Workflow dependencies
 

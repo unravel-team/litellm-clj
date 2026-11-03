@@ -154,7 +154,7 @@
                   final-content (get-in final-response [:choices 0 :message :content])]
               
               (is (some? final-content) "Should receive final response after tool execution")))
-          (println (format "  ⚠️  Function calling test skipped - model did not request tool call"))))
+          (println "  ⚠️  Function calling test skipped - model did not request tool call")))
       
       (catch Exception e
         (println (format "  ⚠️  Function calling test skipped - error: %s" (.getMessage e)))
