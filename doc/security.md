@@ -28,6 +28,26 @@ Provider requests do not supply an alternate client or redirect policy.
 Redirect responses therefore do not authorize forwarding credentials to another endpoint.
 Low-level provider functions accept trusted configuration directly and are not an untrusted request API.
 
+## Workflow dependencies
+
+All actions use full commit IDs. Each reference includes the corresponding release version in a comment.
+The remediation checked upstream tag identities through GitHub's public ref API and inspected the action manifests at those commits:
+
+- [Checkout v4.2.2](https://github.com/actions/checkout/tree/11bd71901bbe5b1630ceea73d27597364c9af683)
+- [Setup Java v4.7.1](https://github.com/actions/setup-java/tree/c5195efecf7bdfc987ee8bae7a71cb8b11521c00)
+- [Setup Clojure 12.5](https://github.com/DeLaGuardo/setup-clojure/tree/bc7570e912b028bbcc22f457adec7fdf98e2f4ed)
+- [Cache v4.2.3](https://github.com/actions/cache/tree/5a3ec84eff668545956fd18022155c47e93e2684)
+- [Upload artifact v4.6.2](https://github.com/actions/upload-artifact/tree/ea165f8d65b6e75b540449e92b4886f43607fa02)
+
+Manifest review establishes declared inputs and entry points, not a complete audit of bundled JavaScript or downloaded tools.
+Workflows grant only `contents: read`. Checkout does not persist credentials.
+Dependabot proposes action updates weekly. Review upstream changes and bundled dependencies before accepting each new commit ID.
+Do not replace commit IDs with mutable tags.
+
+The unit workflow no longer uploads to Codecov or receives `CODECOV_TOKEN`.
+It retains the coverage report as a GitHub artifact for seven days.
+This avoids a second credential boundary in pull-request checks. Remove the obsolete Codecov secret through the owner's repository administration process.
+
 ## Error diagnostics
 
 Library exception constructors remove raw requests, configuration, responses, validation reports, stack traces, and cause text from diagnostic data.
