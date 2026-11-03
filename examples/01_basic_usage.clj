@@ -32,7 +32,7 @@
       
       (catch Exception e
         (println "Error occurred:" (.getMessage e))
-        (pprint/pprint (ex-data e))))))
+        (pprint/pprint (select-keys (ex-data e) [:type :provider :http-status]))))))
 
 
 ;; For REPL usage

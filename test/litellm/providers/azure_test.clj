@@ -126,7 +126,7 @@
 (deftest test-handle-error-response-401
   (testing "Handle 401 authentication error"
     (let [response {:status 401 :body {:error {:message "Invalid API key"}}}]
-      (is (thrown-with-msg? Exception #"Invalid API key"
+      (is (thrown-with-msg? Exception #"Provider returned HTTP 401"
                             (azure/handle-error-response :azure response))))))
 
 (deftest test-handle-error-response-429
@@ -134,7 +134,7 @@
     (let [response {:status 429
                    :body {:error {:message "Rate limit exceeded"}}
                    :headers {"retry-after" "60"}}]
-      (is (thrown-with-msg? Exception #"Rate limit exceeded"
+      (is (thrown-with-msg? Exception #"Provider returned HTTP 429"
                             (azure/handle-error-response :azure response))))))
 
 ;; ============================================================================

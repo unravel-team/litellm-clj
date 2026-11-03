@@ -237,7 +237,7 @@ These are sent as error chunks on the channel:
                   :message (:message details)
                   :provider (:provider details)
                   :recoverable? (:recoverable? details)
-                  :context (:context details)}))))
+                  :http-status (:http-status details)}))))
 ```
 
 ### Human-Readable Summary

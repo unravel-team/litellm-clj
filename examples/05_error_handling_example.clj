@@ -250,7 +250,7 @@
                       :provider-code (:provider-code details)
                       :recoverable? (:recoverable? details)
                       :request-id (:request-id details)
-                      :context (:context details)}))
+                      :http-status (:http-status details)}))
         
         ;; Also print human-readable summary
         (println "Error summary:" (errors/error-summary e))))))

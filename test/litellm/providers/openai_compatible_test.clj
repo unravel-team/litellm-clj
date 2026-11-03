@@ -85,10 +85,7 @@
                                {:model "override" :stream true})
       (is false "expected invalid request")
       (catch clojure.lang.ExceptionInfo e
-        (is (errors/error-type? e :litellm/invalid-request))
-        (is (= #{:model :stream}
-               (set (get-in (ex-data e)
-                            [:context :validation-errors :protected-keys]))))))))
+        (is (errors/error-type? e :litellm/invalid-request))))))
 
 (deftest transform-response-test
   (testing "standard response extracts reasoning, tools, and cache usage"

@@ -28,6 +28,18 @@ Provider requests do not supply an alternate client or redirect policy.
 Redirect responses therefore do not authorize forwarding credentials to another endpoint.
 Low-level provider functions accept trusted configuration directly and are not an untrusted request API.
 
+## Error diagnostics
+
+Library exception constructors remove raw requests, configuration, responses, validation reports, stack traces, and cause text from diagnostic data.
+Nested maps and collections redact credential-like keys and all header values.
+`error-details` applies this filter again, including to errors created by older callers.
+Streaming error chunks use the same filter.
+
+HTTP errors now report the status instead of provider-supplied message text. Network errors use fixed messages.
+This intentionally changes diagnostic output. Error types, retry classification, status, provider codes, and request IDs remain available.
+Do not put secrets in application-defined error messages or metadata. No filter can identify every arbitrary secret in free-form text.
+Log `error-summary` or selected metadata, not raw request maps, `ex-data`, or exception causes from external libraries.
+
 ## Credentialed CI
 
 Pull requests run offline unit tests without provider credentials.
@@ -38,7 +50,7 @@ Before enabling this workflow, the repository owner must create the `provider-e2
 Require reviewer approval, restrict deployment branches to main, and disallow self-approval.
 Store provider credentials only as environment secrets, not repository or organization secrets available to this repository.
 Without environment protection, the YAML alone cannot prevent edits that remove its guards.
-GitHub can create an unprotected environment when a job references a missing name, so do not add credentials before protection exists.
+If a job references a missing environment, GitHub can create it without protection. Do not add credentials before protection exists.
 
 Use dedicated provider projects with low spending limits, minimum permissions, and no production data.
 Review the main revision before approving a run. Run `ruby test/security/workflows_test.rb` for the local workflow policy test.
