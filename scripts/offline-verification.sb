@@ -1,0 +1,10 @@
+(version 1)
+(allow default)
+; Block all network operations, including loopback and DNS.
+(deny network*)
+; Protect personal home directories, including provider and AWS credential files.
+(deny file-read-data (subpath "/Users"))
+(allow file-read-data (subpath (param "WORK")))
+; Keep generated files inside the disposable workspace.
+(deny file-write*)
+(allow file-write* (subpath (param "WORK")) (literal "/dev/null"))
