@@ -1,7 +1,10 @@
 (ns litellm.providers.anthropic-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [litellm.offline]
+            [clojure.test :refer [deftest is testing]]
             [litellm.providers.anthropic :as anthropic]
             [cheshire.core :as json]))
+
+(clojure.test/use-fixtures :each litellm.offline/guard)
 
 (deftest test-transform-tools
   (testing "Transform tools to Anthropic format"

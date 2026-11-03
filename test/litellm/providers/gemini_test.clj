@@ -1,6 +1,9 @@
 (ns litellm.providers.gemini-test
-  (:require [clojure.test :refer [deftest testing is]]
+  (:require [litellm.offline]
+            [clojure.test :refer [deftest testing is]]
             [litellm.providers.gemini :as gemini]))
+
+(clojure.test/use-fixtures :each litellm.offline/guard)
 
 ;; ============================================================================
 ;; Message Transformation Tests

@@ -1,6 +1,6 @@
 #kaocha/v1
 {:tests [{:id :unit
-          :test-paths ["test"]
+          :test-paths ["test/litellm"]
           :source-paths ["src"]
           :ns-patterns [".*-test$"]
           :skip-meta [:integration :e2e]}
@@ -11,6 +11,8 @@
           :ns-patterns [".*-test$"]
           :focus-meta [:e2e]}]
  
+ :cloverage/opts {:output "target/coverage" :codecov? true}
+
  :plugins [:kaocha.plugin/profiling]
  
  :reporter [kaocha.report/dots]

@@ -27,10 +27,10 @@ nrepl:
 		-M -m nrepl.cmdline --middleware '["cider.nrepl/cider-middleware"]' --port 7888
 
 test:
-	clojure -M:test -m kaocha.runner
+	clojure -M:test -m kaocha.runner :unit
 
 test-ci:
-	clojure -M:test -m kaocha.runner --reporter kaocha.report/documentation
+	clojure -M:test -m kaocha.runner :unit --reporter kaocha.report/documentation
 
 coverage:
 	clojure -M:test:coverage

@@ -28,12 +28,8 @@
                       mockery/mockery {:mvn/version "0.1.4"}}}
 
   :coverage {:extra-paths ["test"]
-             :extra-deps {cloverage/cloverage {:mvn/version "1.2.4"}}
-             :main-opts ["-m" "cloverage.coverage"
-                         "--codecov"
-                         "--output" "target/coverage"
-                         "--src-ns-path" "src"
-                         "--test-ns-path" "test"]}
+             :extra-deps {lambdaisland/kaocha-cloverage {:mvn/version "1.1.89"}}
+             :main-opts ["-m" "kaocha.runner" ":unit" "--plugin" "cloverage"]}
 
   :kondo {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.03.13"}}
           :main-opts ["-m" "clj-kondo.main"]}

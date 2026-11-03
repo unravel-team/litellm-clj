@@ -1,6 +1,9 @@
 (ns litellm.config-test
-  (:require [clojure.test :refer [deftest testing is use-fixtures]]
+  (:require [litellm.offline]
+            [clojure.test :refer [deftest testing is use-fixtures]]
             [litellm.config :as config]))
+
+(clojure.test/use-fixtures :each litellm.offline/guard)
 
 ;; Test fixture to clear registry before each test
 (defn clear-registry-fixture [f]

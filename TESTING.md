@@ -2,6 +2,22 @@
 
 This document describes the testing setup and best practices for the litellm-clj project.
 
+## Offline and live boundaries
+
+`make test`, `make test-ci`, and `make coverage` run only the unit suite.
+The tests use fake provider responses and require no API keys.
+Every unit namespace installs `litellm.offline/guard` as an `:each` fixture.
+The guard blocks Hato transport calls and fails on attempts, even if a test catches the exception.
+New unit namespaces must install this fixture too.
+Coverage uses the same Kaocha suite and exclusions as unit tests.
+
+`make e2e`, integration tests, and `make test-streaming` contact real providers or local Ollama.
+These commands can incur charges. Run them only with explicit approval and scoped test credentials.
+Do not use production credentials. Unit tests must not depend on these commands.
+
+The repository has no `make format` or `make check` target.
+Use `make lint` for the existing static gate. Missing targets do not indicate a code failure.
+
 ## Test Structure
 
 Tests are organized in the `test/` directory, mirroring the `src/` structure:

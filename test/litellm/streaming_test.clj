@@ -1,8 +1,11 @@
 (ns litellm.streaming-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [litellm.offline]
+            [clojure.test :refer [deftest is testing]]
             [clojure.core.async :as async :refer [chan go >! close!]]
             [litellm.streaming :as streaming]
             [cheshire.core]))
+
+(clojure.test/use-fixtures :each litellm.offline/guard)
 
 ;; ============================================================================
 ;; Basic Tests

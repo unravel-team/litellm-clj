@@ -1,6 +1,8 @@
 (ns litellm.router-test
-  (:require [clojure.test :refer [deftest testing is use-fixtures]]
-            [litellm.router :as router]))
+  (:require [litellm.offline]
+            [clojure.test :refer [deftest testing is use-fixtures]]
+            [litellm.router :as router]
+            [litellm.core :as core]))
 
 ;; Test fixture to clear registry before each test
 (defn clear-registry-fixture [f]
@@ -8,7 +10,7 @@
   (f)
   (router/clear-router!))
 
-(use-fixtures :each clear-registry-fixture)
+(use-fixtures :each litellm.offline/guard clear-registry-fixture)
 
 ;; ============================================================================
 ;; Configuration Management Tests
@@ -353,39 +355,26 @@
                           (router/completion :nonexistent {:messages [{:role :user :content "test"}]})))))
 
 (deftest test-completion-with-registered-config
-  (testing "Completion uses registered config"
-    (router/register! :test-openai
-                      {:provider :openai
-                       :model "gpt-4"
-                       :config {:api-key "test-key"}})
-    ;; Will fail with authentication error, but that proves it's trying to use the config
-    (is (thrown? Exception
-                 (router/completion :test-openai {:messages [{:role :user :content "test"}]})))))
+  (router/register! :test-openai {:provider :openai :model "gpt-4"
+                                 :config {:api-key "fake"}})
+  (with-redefs [core/completion (fn [provider model request config]
+                                 {:provider provider :model model
+                                  :messages (:messages request) :config config})]
+    (is (= {:provider :openai :model "gpt-4"
+            :messages [{:role :user :content "test"}]
+            :config {:api-key "fake"}}
+           (router/completion :test-openai {:messages [{:role :user :content "test"}]})))))
 
-;; ============================================================================
-;; Chat Function Tests
-;; ============================================================================
-
-(deftest test-chat-without-system-prompt
-  (testing "Chat function without system prompt"
-    (router/register! :test-chat
-                      {:provider :openai
-                       :model "gpt-4"
-                       :config {:api-key "test-key"}})
-    ;; Will fail with authentication, but proves function works
-    (is (thrown? Exception
-                 (router/chat :test-chat "What is 2+2?")))))
-
-(deftest test-chat-with-system-prompt
-  (testing "Chat function with system prompt"
-    (router/register! :test-chat-sys
-                      {:provider :openai
-                       :model "gpt-4"
-                       :config {:api-key "test-key"}})
-    ;; Will fail with authentication, but proves function works
-    (is (thrown? Exception
-                 (router/chat :test-chat-sys "What is 2+2?" 
-                             :system-prompt "You are a math tutor")))))
+(deftest test-chat-messages
+  (router/register! :test-chat {:provider :openai :model "gpt-4"
+                               :config {:api-key "fake"}})
+  (with-redefs [core/completion (fn [_ _ request _] (:messages request))]
+    (is (= [{:role :user :content "What is 2+2?"}]
+           (router/chat :test-chat "What is 2+2?")))
+    (is (= [{:role :system :content "You are a math tutor"}
+            {:role :user :content "What is 2+2?"}]
+           (router/chat :test-chat "What is 2+2?"
+                        :system-prompt "You are a math tutor")))))
 
 ;; ============================================================================
 ;; Integration Tests (require API keys)

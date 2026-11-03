@@ -1,6 +1,9 @@
 (ns litellm.providers.azure-test
-  (:require [clojure.test :refer [deftest testing is]]
+  (:require [litellm.offline]
+            [clojure.test :refer [deftest testing is]]
             [litellm.providers.azure :as azure]))
+
+(clojure.test/use-fixtures :each litellm.offline/guard)
 
 ;; ============================================================================
 ;; Message Transformation Tests

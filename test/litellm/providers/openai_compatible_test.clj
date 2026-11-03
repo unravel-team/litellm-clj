@@ -1,7 +1,10 @@
 (ns litellm.providers.openai-compatible-test
-  (:require [clojure.test :refer [are deftest is testing]]
+  (:require [litellm.offline]
+            [clojure.test :refer [are deftest is testing]]
             [litellm.providers.openai-compatible :as compat]
             [litellm.errors :as errors]))
+
+(clojure.test/use-fixtures :each litellm.offline/guard)
 
 (deftest kw->api-string-test
   (testing "keywords and strings become provider snake_case strings"
