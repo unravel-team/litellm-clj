@@ -36,18 +36,8 @@ jobs:
         with:
           cli: 1.11.1.1413
       
-      - name: Cache dependencies
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
-        with:
-          path: |
-            ~/.m2/repository
-            ~/.gitlibs
-          key: ${{ runner.os }}-clojure-${{ hashFiles('**/deps.edn', '**/tests.edn') }}
-          restore-keys: |
-            ${{ runner.os }}-clojure-
-      
       - name: Install dependencies
-        run: clojure -P -M:test
+        run: clojure -Srepro -P -M:test
       
       - name: Check workflow security
         run: ruby test/security/workflows_test.rb
@@ -57,7 +47,7 @@ jobs:
       
       - name: Generate coverage report (JDK 17 only)
         if: matrix.java == '17'
-        run: clojure -M:test:coverage
+        run: clojure -Srepro -M:test:coverage
       
       - name: Upload coverage to Codecov (main pushes only)
         if: matrix.java == '17' && github.event_name == 'push' && github.ref == 'refs/heads/main'

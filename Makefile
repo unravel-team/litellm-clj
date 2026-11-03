@@ -1,4 +1,4 @@
-.PHONY: help repl nrepl test test-ci coverage lint clean build install deploy e2e test-streaming compile check-reflection check-clean-worktree .release-commit release-major release-minor current-version
+.PHONY: dependency-inventory dependency-audit help repl nrepl test test-ci coverage lint clean build install deploy e2e test-streaming compile check-reflection check-clean-worktree .release-commit release-major release-minor current-version
 
 # The library version is maj.min.x: maj.min lives in the VERSION file,
 # x is the git commit count at build time (see build.clj).
@@ -19,7 +19,7 @@ help:
 	@echo "  check-reflection - Fail on reflection warnings in src"
 
 repl:
-	clojure -M:repl
+	clojure -Srepro -M:repl
 
 nrepl:
 	@echo "Starting nREPL server on port 7888..."
@@ -27,16 +27,28 @@ nrepl:
 		-M -m nrepl.cmdline --middleware '["cider.nrepl/cider-middleware"]' --port 7888
 
 test:
-	clojure -M:test -m kaocha.runner :unit
+	clojure -Srepro -M:test -m kaocha.runner :unit
 
 test-ci:
-	clojure -M:test -m kaocha.runner :unit --reporter kaocha.report/documentation
+	clojure -Srepro -M:test -m kaocha.runner :unit --reporter kaocha.report/documentation
+
+dependency-inventory:
+	clojure -Srepro -M:inventory target/security/runtime.tsv
+	clojure -Srepro -M:test:inventory target/security/test.tsv
+	clojure -Srepro -M:test:coverage:inventory target/security/coverage.tsv
+	clojure -Srepro -M:build:inventory target/security/build.tsv
+	clojure -Srepro -M:bedrock:inventory target/security/bedrock.tsv
+	clojure -Srepro -M:outdated:inventory target/security/outdated.tsv
+	clojure -Srepro -M:kondo:inventory target/security/kondo.tsv
+
+dependency-audit: dependency-inventory
+	ruby scripts/audit_dependencies.rb target/security/*.tsv
 
 coverage:
-	clojure -M:test:coverage
+	clojure -Srepro -M:test:coverage
 
 lint:
-	clojure -M:kondo --lint src test
+	clojure -Srepro -M:kondo --lint src test
 
 # Reflection the JVM tolerates breaks consumers compiling to GraalVM
 # native images, so warnings fail the build. Loads every src namespace.
@@ -49,7 +61,7 @@ e2e:
 	@echo "Running E2E provider tests..."
 	@echo "Testing real API calls for each provider (configure API keys as needed)"
 	@echo ""
-	clojure -M:test -m kaocha.runner :e2e --reporter kaocha.report/documentation
+	clojure -Srepro -M:test -m kaocha.runner :e2e --reporter kaocha.report/documentation
 
 clean:
 	rm -rf target .cpcache
@@ -89,18 +101,18 @@ current-version:
 	@echo "$$(cat $(VERSION_FILE)).$$(git rev-list --count HEAD 2>/dev/null || echo '?')"
 
 build:
-	clojure -T:build jar
+	clojure -Srepro -T:build jar
 
 install:
-	clojure -T:build install
+	clojure -Srepro -T:build install
 
 deploy:
-	clojure -T:build deploy
+	clojure -Srepro -T:build deploy
 
 # Streaming-specific targets
 test-streaming:
-	clojure -M test_streaming_manual.clj
+	clojure -Srepro -M test_streaming_manual.clj
 
 compile:
 	@echo "Compiling and checking syntax..."
-	clojure -M -e "(require 'litellm.core) (require 'litellm.streaming) (println \"✓ Code compiles successfully\")"
+	clojure -Srepro -M -e "(require 'litellm.core) (require 'litellm.streaming) (println \"✓ Code compiles successfully\")"

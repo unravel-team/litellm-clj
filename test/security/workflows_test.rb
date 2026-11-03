@@ -36,6 +36,17 @@ class WorkflowSecurityTest < Minitest::Test
     end
   end
 
+  def test_ci_does_not_restore_dependency_caches
+    workflows.each_value do |workflow|
+      workflow.fetch('jobs').each_value do |job|
+        job.fetch('steps').each do |step|
+          refute_match(/actions\/cache(?:\/|@)/, step.fetch('uses', ''))
+          refute step.fetch('with', {}).key?('cache'), 'Setup actions must not restore dependency caches'
+        end
+      end
+    end
+  end
+
   def test_codecov_service_remains_available_only_after_main_push
     steps = workflows.fetch('.github/workflows/test.yml').fetch('jobs').fetch('test').fetch('steps')
     upload = steps.find { |step| step.fetch('uses', '').start_with?('codecov/codecov-action@') }

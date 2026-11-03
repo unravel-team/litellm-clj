@@ -28,6 +28,38 @@ Provider requests do not supply an alternate client or redirect policy.
 Redirect responses therefore do not authorize forwarding credentials to another endpoint.
 Low-level provider functions accept trusted configuration directly and are not an untrusted request API.
 
+## Dependency provenance
+
+All declared Maven dependencies use exact versions, including antq 2.11.1276.
+The [Clojars artifact metadata](https://clojars.org/api/artifacts/com.github.liquidz/antq) identifies that antq release.
+Make and CI use `-Srepro` to exclude personal Clojure configuration.
+CI does not restore dependency caches. Fresh runners resolve the declared graph.
+
+Run `make dependency-inventory` after dependency resolution.
+The command writes tab-separated inventories under `target/security/` for runtime, tests, coverage, build, Bedrock, antq, and clj-kondo.
+Each inventory records the resolved Maven coordinate, version, artifact filename, SHA-256 digest, and dependent coordinates.
+This is a checksummed resolved graph, not a claim that direct version pins lock every upstream POM.
+The inventory command rejects mutable versions and snapshots.
+It reads the CLI's actual basis and omits machine-local paths and repository credentials.
+
+Regenerate inventories on a clean machine with the same CLI and JDK.
+Compare the inventories byte for byte before a release.
+If a version, graph, or digest changes, investigate the source before building.
+Archive the inventories with release artifacts and their source revision.
+A digest from one machine is evidence for comparison, not an independent upstream signature.
+
+`make dependency-audit` also queries the public [OSV API](https://osv.dev/docs/).
+It sends only public Maven coordinates and versions, not source or credentials.
+It saves the complete result in `target/security/osv.json` and fails on advisory matches or incomplete responses.
+It is a networked audit command, not an offline test.
+An advisory match requires a reachability assessment or an upgrade. No match does not prove absence of vulnerabilities.
+
+The initial audit covered 217 distinct package versions and found matches for 19.
+The stored report is [dependency-audit-initial.json](security/dependency-audit-initial.json).
+Runtime matches include Logback 1.4.11, Jackson Core 2.15.2, and Clojure 1.11.1.
+Build and optional tooling also resolve old Jackson Databind, AWS SDK v1, Ion, jsoup, Jetty, Guava, Commons, and Plexus versions.
+These findings require follow-up remediation or explicit assessment. Reproducibility does not make those versions safe.
+
 ## Workflow dependencies
 
 All actions use full commit IDs. Each reference includes the corresponding release version in a comment.

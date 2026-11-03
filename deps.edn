@@ -17,7 +17,9 @@
         metosin/malli {:mvn/version "0.13.0"}}
 
  :aliases
- {:dev {:extra-paths ["dev" "test"]
+ {:inventory {:main-opts ["scripts/dependency_inventory.clj"]}
+
+  :dev {:extra-paths ["dev" "test"]
         :extra-deps {org.clojure/tools.namespace {:mvn/version "1.4.4"}
                      criterium/criterium {:mvn/version "0.4.6"}
                      org.clojure/tools.trace {:mvn/version "0.7.11"}}}
@@ -47,7 +49,7 @@
                         :jar "target/litellm.jar"
                         :main-class litellm.main}}
 
-  :outdated {:replace-deps {com.github.liquidz/antq {:mvn/version "RELEASE"}}
+  :outdated {:replace-deps {com.github.liquidz/antq {:mvn/version "2.11.1276"}}
              :main-opts ["-m" "antq.core"]}
 
   ;; Optional: AWS Bedrock provider

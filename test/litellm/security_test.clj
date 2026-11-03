@@ -1,5 +1,6 @@
 (ns litellm.security-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [clojure.edn :as edn]
             [litellm.core :as core]
             [litellm.router :as router]
             [litellm.providers.core :as providers]
@@ -7,6 +8,16 @@
             [hato.client :as http]))
 
 (use-fixtures :each offline/guard)
+
+(deftest declared-dependencies-use-exact-releases
+  (let [deps (edn/read-string (slurp "deps.edn"))]
+    (doseq [dependency-map (concat [(:deps deps)]
+                                  (mapcat #(keep % [:deps :extra-deps :replace-deps])
+                                          (vals (:aliases deps))))
+            [coordinate version] dependency-map]
+      (is (boolean (re-matches #"[0-9][0-9A-Za-z.\-]*" (:mvn/version version "")))
+          (str coordinate " must use an exact Maven release"))
+      (is (not (re-find #"(?i)SNAPSHOT" (:mvn/version version "")))))))
 
 (deftest request-destinations-are-not-trusted
   (let [calls (atom 0)
