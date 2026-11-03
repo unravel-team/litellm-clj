@@ -24,7 +24,7 @@
     (try
       (close! ch)
       (catch Exception e
-        (log/warn "Error closing stream" {:error (.getMessage e)})))))
+        (log/warn "Error closing stream" {:error (.getName (class e))})))))
 
 ;; ============================================================================
 ;; Error Handling
@@ -208,5 +208,5 @@
         (try
           (json-decoder data true)
           (catch Exception e
-            (log/debug "Failed to parse SSE line" {:line line :error (.getMessage e)})
+            (log/debug "Failed to parse SSE line" {:line-length (count line) :error (.getName (class e))})
             nil))))))

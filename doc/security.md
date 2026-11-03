@@ -51,6 +51,14 @@ Both pull-request and main jobs retain the coverage report as a GitHub artifact 
 Jeeves chose to preserve the existing Codecov service and its history rather than remove it.
 The Codecov tag resolves through an annotated tag to the pinned commit. Its manifest was inspected, but its downloaded uploader remains a separate supply-chain boundary.
 
+## Logs
+
+Default logs omit prompts, tools, response bodies, response headers, raw stream lines, and exception messages from external operations.
+Parse failures retain the line length and exception class. Streaming diagnostics retain status, model, provider, and chunk counts where available.
+This applies at debug level too. Changing the log level does not authorize payload logging.
+The tests capture every log level and consume fake streams to completion.
+Application callbacks still receive content. The application owns any logging in those callbacks.
+
 ## Error diagnostics
 
 Library exception constructors remove raw requests, configuration, responses, validation reports, stack traces, and cause text from diagnostic data.

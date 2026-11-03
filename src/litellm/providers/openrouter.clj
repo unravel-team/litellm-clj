@@ -209,7 +209,7 @@
                                     {:executor thread-pool})))]
       (= 200 (:status response)))
     (catch Exception e
-      (log/warn "OpenRouter health check failed" {:error (.getMessage e)})
+      (log/warn "OpenRouter health check failed" {:error (.getName (class e))})
       false)))
 
 (defn get-cost-per-token-impl
@@ -230,7 +230,7 @@
         (try
           (json/decode data true)
           (catch Exception e
-            (log/debug "Failed to parse SSE line" {:line line :error (.getMessage e)})
+            (log/debug "Failed to parse SSE line" {:line-length (count line) :error (.getName (class e))})
             nil))))))
 
 (defn transform-streaming-chunk
@@ -302,7 +302,7 @@
               (streaming/close-stream! output-ch))))
         
         (catch Exception e
-          (log/error "Error in streaming request" {:error (.getMessage e)})
+          (log/error "Error in streaming request" {:error (.getName (class e))})
           (>! output-ch (streaming/stream-error "openrouter" (.getMessage e)))
           (streaming/close-stream! output-ch))))
     
@@ -323,7 +323,7 @@
         (map :id (get-in response [:body :data]))
         (throw (ex-info "Failed to list models" {:status (:status response)}))))
     (catch Exception e
-      (log/error "Error listing OpenRouter models" e)
+      (log/error "Error listing OpenRouter models" {:error-class (.getName (class e))})
       [])))
 
 (defn validate-api-key
@@ -335,7 +335,7 @@
                              :timeout 5000})]
       (= 200 (:status response)))
     (catch Exception e
-      (log/debug "API key validation failed" {:error (.getMessage e)})
+      (log/debug "API key validation failed" {:error (.getName (class e))})
       false)))
 
 ;; ============================================================================

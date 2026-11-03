@@ -293,7 +293,7 @@
                (streaming/close-stream! output-ch))))
          (catch Exception e
            (log/error "Error in OpenAI-compatible streaming request" {:provider provider
-                                                                       :error (.getMessage e)})
+                                                                       :error (.getName (class e))})
            (>! output-ch (streaming/stream-error provider (.getMessage e)))
            (streaming/close-stream! output-ch))))
      output-ch)))

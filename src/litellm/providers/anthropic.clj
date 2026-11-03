@@ -314,7 +314,7 @@
                                     {:executor thread-pool})))]
       (= 200 (:status response)))
     (catch Exception e
-      (log/warn "Anthropic health check failed" {:error (.getMessage e)})
+      (log/warn "Anthropic health check failed" {:error (.getName (class e))})
       false)))
 
 (defn get-cost-per-token-impl
@@ -413,7 +413,7 @@
     ;; Use thread instead of go for blocking I/O
     (async/thread
       (try
-        (log/debug "Making Anthropic streaming request" {:url url :request transformed-request})
+        (log/debug "Making Anthropic streaming request" {:provider :anthropic :model (:model transformed-request)})
         (let [response (http/post url
                                   {:headers {"x-api-key" (:api-key config)
                                              "anthropic-version" "2023-06-01"
@@ -423,7 +423,7 @@
                                    :timeout (:timeout config 30000)
                                    :as :stream})]
           
-          (log/debug "Received response" {:status (:status response) :headers (:headers response)})
+          (log/debug "Received response" {:status (:status response)})
           
           ;; Check if response is valid
           (cond
@@ -467,7 +467,7 @@
                                       (async/>!! output-ch transformed)
                                       (log/debug "Sent chunk" {:chunk-number (inc chunk-count)})))
                                   (catch Exception e
-                                    (log/warn "Failed to parse SSE line" {:line line :error (or (.getMessage e) (str e))}))))))
+                                    (log/warn "Failed to parse SSE line" {:line-length (count line) :error (.getName (class e))}))))))
                           (recur (inc chunk-count)))
                         (log/debug "Stream ended" {:total-chunks chunk-count})))
                     (finally
@@ -477,9 +477,7 @@
         
         (catch Exception e
           (log/error "Error in streaming request" 
-                     {:error (or (.getMessage e) (str e))
-                      :error-class (class e)
-                      :stack-trace (take 5 (.getStackTrace e))})
+                     {:error-class (.getName (class e))})
           (async/>!! output-ch (streaming/stream-error "anthropic" (or (.getMessage e) (str "Exception: " (class e)))))
           (streaming/close-stream! output-ch))))
     
@@ -501,7 +499,7 @@
         (map :id (get-in response [:body :data]))
         (throw (ex-info "Failed to list models" {:status (:status response)}))))
     (catch Exception e
-      (log/error "Error listing Anthropic models" e)
+      (log/error "Error listing Anthropic models" {:error-class (.getName (class e))})
       [])))
 
 (defn validate-api-key
@@ -514,7 +512,7 @@
                              :timeout 5000})]
       (= 200 (:status response)))
     (catch Exception e
-      (log/debug "API key validation failed" {:error (.getMessage e)})
+      (log/debug "API key validation failed" {:error (.getName (class e))})
       false)))
 
 ;; ============================================================================

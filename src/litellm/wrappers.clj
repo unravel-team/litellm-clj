@@ -40,7 +40,7 @@
                      (catch Exception e
                        (log/warn "Config failed, trying fallback"
                                  {:config config-name
-                                  :error (.getMessage e)
+                                  :error (.getName (class e))
                                   :remaining (rest remaining)})
                        {:success false :error e}))]
         (if (:success result)
@@ -207,7 +207,7 @@
     (try
       (callback cost usage response)
       (catch Exception e
-        (log/error "Cost tracking callback failed" {:error (.getMessage e)})))
+        (log/error "Cost tracking callback failed" {:error (.getName (class e))})))
     
     ;; Return original response
     response))

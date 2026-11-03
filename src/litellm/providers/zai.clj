@@ -158,7 +158,7 @@
           response (http/get (models-url config) request)]
       (= 200 (:status response)))
     (catch Exception e
-      (log/warn "Z.AI health check failed" {:error (.getMessage e)})
+      (log/warn "Z.AI health check failed" {:error (.getName (class e))})
       false)))
 
 (defn get-cost-per-token-impl

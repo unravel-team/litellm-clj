@@ -240,7 +240,7 @@
                                     {:executor thread-pool})))]
       (= 200 (:status response)))
     (catch Exception e
-      (log/warn "Mistral health check failed" {:error (.getMessage e)})
+      (log/warn "Mistral health check failed" {:error (.getName (class e))})
       false)))
 
 (defn get-cost-per-token-impl
@@ -261,7 +261,7 @@
         (try
           (json/decode data true)
           (catch Exception e
-            (log/debug "Failed to parse SSE line" {:line line :error (.getMessage e)})
+            (log/debug "Failed to parse SSE line" {:line-length (count line) :error (.getName (class e))})
             nil))))))
 
 (defn transform-streaming-chunk
@@ -358,7 +358,7 @@
         (map :id (get-in response [:body :data]))
         (throw (ex-info "Failed to list models" {:status (:status response)}))))
     (catch Exception e
-      (log/error "Error listing Mistral models" e)
+      (log/error "Error listing Mistral models" {:error-class (.getName (class e))})
       [])))
 
 (defn validate-api-key
@@ -370,7 +370,7 @@
                              :timeout 5000})]
       (= 200 (:status response)))
     (catch Exception e
-      (log/debug "API key validation failed" {:error (.getMessage e)})
+      (log/debug "API key validation failed" {:error (.getName (class e))})
       false)))
 
 ;; ============================================================================

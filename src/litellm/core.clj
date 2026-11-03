@@ -404,10 +404,10 @@
           (throw e))
         ;; Non-litellm error
         (do
-          (log/error "Unexpected error" e)
+          (log/error "Unexpected error" {:error-class (.getName (class e))})
           (throw e))))
     (catch Exception e
-      (log/error "Unexpected error" e)
+      (log/error "Unexpected error" {:error-class (.getName (class e))})
       (throw e))))
 
 
