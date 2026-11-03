@@ -37,6 +37,7 @@ The remediation checked upstream tag identities through GitHub's public ref API 
 - [Setup Java v4.7.1](https://github.com/actions/setup-java/tree/c5195efecf7bdfc987ee8bae7a71cb8b11521c00)
 - [Setup Clojure 12.5](https://github.com/DeLaGuardo/setup-clojure/tree/bc7570e912b028bbcc22f457adec7fdf98e2f4ed)
 - [Cache v4.2.3](https://github.com/actions/cache/tree/5a3ec84eff668545956fd18022155c47e93e2684)
+- [Codecov v4.6.0](https://github.com/codecov/codecov-action/tree/b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238)
 - [Upload artifact v4.6.2](https://github.com/actions/upload-artifact/tree/ea165f8d65b6e75b540449e92b4886f43607fa02)
 
 Manifest review establishes declared inputs and entry points, not a complete audit of bundled JavaScript or downloaded tools.
@@ -44,9 +45,11 @@ Workflows grant only `contents: read`. Checkout does not persist credentials.
 Dependabot proposes action updates weekly. Review upstream changes and bundled dependencies before accepting each new commit ID.
 Do not replace commit IDs with mutable tags.
 
-The unit workflow no longer uploads to Codecov or receives `CODECOV_TOKEN`.
-It retains the coverage report as a GitHub artifact for seven days.
-This avoids a second credential boundary in pull-request checks. Remove the obsolete Codecov secret through the owner's repository administration process.
+The unit workflow uploads to Codecov only for push events on main, on JDK 17.
+Only that upload step receives `CODECOV_TOKEN`. Pull-request jobs receive no Codecov token.
+Both pull-request and main jobs retain the coverage report as a GitHub artifact for seven days.
+Jeeves chose to preserve the existing Codecov service and its history rather than remove it.
+The Codecov tag resolves through an annotated tag to the pinned commit. Its manifest was inspected, but its downloaded uploader remains a separate supply-chain boundary.
 
 ## Error diagnostics
 
