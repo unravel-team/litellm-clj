@@ -359,5 +359,5 @@
       (catch Exception e
         {:success false
          :provider "ollama"
-         :error (.getMessage e)
+         :error (.getName (class e))
          :error-type (type e)}))))

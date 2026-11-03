@@ -466,7 +466,7 @@
 
         (catch Exception e
           (log/error "Error in Bedrock streaming request" {:error (.getName (class e))})
-          (async/>!! output-ch (streaming/stream-error "bedrock" (.getMessage e)))
+          (async/>!! output-ch (streaming/stream-error "bedrock" "Streaming request failed"))
           (streaming/close-stream! output-ch))))
 
     output-ch))
@@ -509,7 +509,7 @@
       (catch Exception e
         {:success false
          :provider "bedrock"
-         :error (.getMessage e)
+         :error (.getName (class e))
          :error-type (type e)}))))
 
 ;; ============================================================================

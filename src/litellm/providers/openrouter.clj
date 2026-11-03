@@ -303,7 +303,7 @@
         
         (catch Exception e
           (log/error "Error in streaming request" {:error (.getName (class e))})
-          (>! output-ch (streaming/stream-error "openrouter" (.getMessage e)))
+          (>! output-ch (streaming/stream-error "openrouter" "Streaming request failed"))
           (streaming/close-stream! output-ch))))
     
     output-ch))
@@ -361,5 +361,5 @@
       (catch Exception e
         {:success false
          :provider "openrouter"
-         :error (.getMessage e)
+         :error (.getName (class e))
          :error-type (type e)}))))

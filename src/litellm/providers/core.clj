@@ -767,7 +767,7 @@
       (catch Exception e
         {:success false
          :provider provider-name
-         :error (.getMessage e)}))))
+         :error (.getName (class e))}))))
 
 ;; ============================================================================
 ;; Provider Comparison Utilities

@@ -114,7 +114,9 @@ Application callbacks still receive content. The application owns any logging in
 Library exception constructors remove raw requests, configuration, responses, validation reports, stack traces, and cause text from diagnostic data.
 Nested maps and collections redact credential-like keys and all header values.
 `error-details` applies this filter again, including to errors created by older callers.
-Streaming error chunks use the same filter.
+Streaming error chunks use the same filter. Transport failures use fixed text rather than external exception messages.
+Fallback aggregates, retry logs, and provider test diagnostics retain exception classes, not external message text.
+The HTTP wrapper preserves typed library errors and their retry/status metadata, including errors wrapped by futures.
 
 HTTP errors now report the status instead of provider-supplied message text. Network errors use fixed messages.
 This intentionally changes diagnostic output. Error types, retry classification, status, provider codes, and request IDs remain available.

@@ -306,7 +306,7 @@
 
         (catch Exception e
           (log/error "Error in streaming request" {:error (.getName (class e))})
-          (>! output-ch (streaming/stream-error "azure" (.getMessage e)))
+          (>! output-ch (streaming/stream-error "azure" "Streaming request failed"))
           (streaming/close-stream! output-ch))))
 
     output-ch))
@@ -413,6 +413,6 @@
       (catch Exception e
         {:success false
          :provider "azure"
-         :error (.getMessage e)
+         :error (.getName (class e))
          :error-type (type e)}))))
 

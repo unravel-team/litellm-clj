@@ -531,8 +531,8 @@
                :cause e)))
     (catch java.util.concurrent.ExecutionException e
       ;; Re-throw if already a litellm error
-      (if (litellm-error? e)
-        (throw e)
+      (if (litellm-error? (ex-cause e))
+        (throw (ex-cause e))
         ;; Hato throws ExceptionInfo with HTTP response in ex-data
         (let [data (-> e ex-cause ex-data)]
           (if-let [status (:status data)]
@@ -560,12 +560,11 @@
             ;; Not an HTTP error - wrap as provider error
             (throw (provider-error
                      provider-name
-                     (or (.getMessage e) "HTTP error")
+                     "HTTP request failed"
                      :cause e))))))
     (catch Exception e
-      (throw (provider-error
-              provider-name
-              (or (.getMessage e) "Unexpected error")
-              :cause e)))))
+      (if (litellm-error? e)
+        (throw e)
+        (throw (provider-error provider-name "HTTP request failed"))))))
 
 

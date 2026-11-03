@@ -7,6 +7,7 @@
             [cheshire.core :as json]
             [hato.client :as http]
             [litellm.core :as core]
+            [litellm.wrappers :as wrappers]
             [litellm.streaming :as streaming]
             [litellm.providers.mistral :as mistral]
             [litellm.providers.openrouter :as openrouter]
@@ -33,6 +34,22 @@
     (let [[value port] (async/alts!! [ch (async/timeout 3000)])]
       (is (= ch port) "Fake stream must close before timeout")
       (when (and (= ch port) value) (recur)))))
+
+(deftest retry-and-fallback-diagnostics-omit-external-text
+  (let [sentinel "private-retry-credential"
+        fail (fn [& _] (throw (Exception. sentinel)))
+        failures (atom [])
+        entries (capture-logs
+                 #(doseq [invoke [(fn [] (wrappers/with-retry :fake {} fail
+                                                              {:max-attempts 2 :backoff-ms 0}))
+                                  (fn [] (wrappers/with-fallback [:fake] {} fail))]]
+                    (try (invoke)
+                         (catch Exception e
+                           (swap! failures conj e)))))]
+    (is (seq entries))
+    (is (not (str/includes? (pr-str entries) sentinel)))
+    ;; The fallback owns its aggregate exception data, not the caller's original exception.
+    (is (not (str/includes? (pr-str (ex-data (last @failures))) sentinel)))))
 
 (deftest malformed-stream-logs-contain-metadata-not-content
   (let [sentinel "private-malformed-chunk"

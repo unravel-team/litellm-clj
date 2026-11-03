@@ -396,5 +396,5 @@
       (catch Exception e
         {:success false
          :provider "mistral"
-         :error (.getMessage e)
+         :error (.getName (class e))
          :error-type (type e)}))))

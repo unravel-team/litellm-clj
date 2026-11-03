@@ -346,7 +346,7 @@
         
         (catch Exception e
           (log/error "Error in streaming request" {:error (.getName (class e))})
-          (>! output-ch (streaming/stream-error "gemini" (.getMessage e)))
+          (>! output-ch (streaming/stream-error "gemini" "Streaming request failed"))
           (streaming/close-stream! output-ch))))
     
     output-ch))
@@ -477,5 +477,5 @@
       (catch Exception e
         {:success false
          :provider "gemini"
-         :error (.getMessage e)
+         :error (.getName (class e))
          :error-type (type e)}))))

@@ -305,7 +305,7 @@
         
         (catch Exception e
           (log/error "Error in streaming request" {:error (.getName (class e))})
-          (>! output-ch (streaming/stream-error "openai" (.getMessage e)))
+          (>! output-ch (streaming/stream-error "openai" "Streaming request failed"))
           (streaming/close-stream! output-ch))))
     
     output-ch))
@@ -428,5 +428,5 @@
       (catch Exception e
         {:success false
          :provider "openai"
-         :error (.getMessage e)
+         :error (.getName (class e))
          :error-type (type e)}))))

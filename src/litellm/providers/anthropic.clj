@@ -478,7 +478,7 @@
         (catch Exception e
           (log/error "Error in streaming request" 
                      {:error-class (.getName (class e))})
-          (async/>!! output-ch (streaming/stream-error "anthropic" (or (.getMessage e) (str "Exception: " (class e)))))
+          (async/>!! output-ch (streaming/stream-error "anthropic" "Streaming request failed"))
           (streaming/close-stream! output-ch))))
     
     output-ch))
@@ -538,5 +538,5 @@
       (catch Exception e
         {:success false
          :provider "anthropic"
-         :error (.getMessage e)
+         :error (.getName (class e))
          :error-type (type e)}))))

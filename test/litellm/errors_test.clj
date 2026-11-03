@@ -3,7 +3,9 @@
             [clojure.string :as str]
             [litellm.errors :as errors]
             [litellm.core :as core]
-            [litellm.offline :as offline]))
+            [litellm.offline :as offline]
+            [clojure.core.async :as async]
+            [hato.client :as http]))
 
 (use-fixtures :each offline/guard)
 
@@ -31,6 +33,35 @@
     (doseq [error [e connection]]
       (is (not (str/includes? (pr-str error) secret)))
       (is (not (str/includes? (pr-str (errors/error-details error)) secret))))))
+
+(deftest generic-and-future-errors-omit-opaque-external-text
+  (let [secret "opaque-future-credential"]
+    (doseq [cause [(IllegalStateException. secret)
+                   (java.util.concurrent.ExecutionException. (Exception. secret))]]
+      (let [e (try (errors/wrap-http-errors "openai" #(throw cause))
+                   (catch Exception e e))]
+        (is (not (str/includes? (pr-str e) secret)))))
+    (let [typed (errors/rate-limit "openai" "Rate limited" :retry-after 17)
+          e (try (errors/wrap-http-errors "openai" #(throw typed))
+                 (catch Exception e e))]
+      (is (errors/rate-limit-error? e))
+      (is (= 429 (:http-status (ex-data e))))
+      (is (= 17 (:retry-after (ex-data e)))))))
+
+(deftest streaming-transport-failures-omit-opaque-external-text
+  (let [secret "opaque-stream-credential"]
+    (doseq [provider [:openai :anthropic :gemini :azure :openrouter :deepseek]]
+      (with-redefs [http/post (fn [& _] (throw (IllegalStateException. secret)))]
+        (let [ch (core/completion provider "fake-model"
+                                  {:messages [{:role :user :content "test"}] :stream true}
+                                  {:api-key "fake" :api-base "https://trusted.invalid" :deployment "fake"})
+              [chunk port] (async/alts!! [ch (async/timeout 3000)])]
+          (is (= ch port))
+          (is (errors/error-chunk? chunk))
+          (is (not (str/includes? (pr-str chunk) secret)))
+          (let [[end end-port] (async/alts!! [ch (async/timeout 3000)])]
+            (is (= ch end-port))
+            (is (nil? end))))))))
 
 (deftest validation-errors-remain-safe-when-logged
   (let [secret "fake-validation-secret"
