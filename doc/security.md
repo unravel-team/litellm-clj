@@ -27,3 +27,25 @@ Hato 0.9.0 uses the JDK HTTP client with redirect policy `:never` by default.
 Provider requests do not supply an alternate client or redirect policy.
 Redirect responses therefore do not authorize forwarding credentials to another endpoint.
 Low-level provider functions accept trusted configuration directly and are not an untrusted request API.
+
+## Credentialed CI
+
+Pull requests run offline unit tests without provider credentials.
+The E2E workflow runs only through manual dispatch on main, checks out main, and targets the `provider-e2e` environment.
+It does not run on pull requests or automatically after merge.
+
+Before enabling this workflow, the repository owner must create the `provider-e2e` environment.
+Require reviewer approval, restrict deployment branches to main, and disallow self-approval.
+Store provider credentials only as environment secrets, not repository or organization secrets available to this repository.
+Without environment protection, the YAML alone cannot prevent edits that remove its guards.
+GitHub can create an unprotected environment when a job references a missing name, so do not add credentials before protection exists.
+
+Use dedicated provider projects with low spending limits, minimum permissions, and no production data.
+Review the main revision before approving a run. Run `ruby test/security/workflows_test.rb` for the local workflow policy test.
+No credentialed workflow was run during remediation.
+
+If earlier pull-request runs received provider credentials, treat those credentials as potentially exposed.
+Revoke them at each provider, review usage and billing, then issue replacement test-only keys.
+Remove old repository or organization secrets before storing replacements in the protected environment.
+Review retained workflow logs and artifacts for disclosures. Limit access or remove exposed artifacts under the owner's incident process.
+Credential rotation and GitHub environment setup require owner action. Local code changes do not perform them.

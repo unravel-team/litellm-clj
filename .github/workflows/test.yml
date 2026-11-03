@@ -44,6 +44,9 @@ jobs:
       - name: Install dependencies
         run: clojure -P -M:test
       
+      - name: Check workflow security
+        run: ruby test/security/workflows_test.rb
+
       - name: Run tests
         run: make test
       
