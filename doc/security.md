@@ -55,7 +55,7 @@ It is a networked audit command, not an offline test.
 An advisory match requires a reachability assessment or an upgrade. No match does not prove absence of vulnerabilities.
 
 The initial audit covered 217 distinct package versions and found matches for 19.
-The stored report is [dependency-audit-initial.json](security/dependency-audit-initial.json).
+Generated audit reports stay outside version control.
 Runtime matches include Logback 1.4.11, Jackson Core 2.15.2, and Clojure 1.11.1.
 Build and optional tooling also resolve old Jackson Databind, AWS SDK v1, Ion, jsoup, Jetty, Guava, Commons, and Plexus versions.
 Follow-up issue `.10` upgraded runtime Clojure to 1.12.6, Logback to 1.5.38, and Cheshire to 6.2.1 with Jackson 2.21.8.
@@ -66,7 +66,7 @@ The clj-kondo alias uses the patched Cheshire parser. Tool aliases explicitly pi
 No S3 deploy capability was removed. The deploy tool's redundant SLF4J no-op backend is excluded in favor of the patched Logback backend.
 
 The final audit covered 190 distinct package versions with zero OSV matches.
-Its report is [dependency-audit-remediated.json](security/dependency-audit-remediated.json).
+Run `make dependency-audit` to produce a current report in `target/security/osv.json`.
 This result covers the seven inventoried graphs, not every optional REPL or developer alias, native executable, or GitHub Action bundle.
 It is a time-specific database result, not proof of exploit resistance.
 The existing fake-provider suite and local JAR build passed after the upgrades.
@@ -101,8 +101,9 @@ Lockfiles stay in memory. The command does not install packages, run action code
 It writes `target/security/actions.json` and exits nonzero on advisory matches or incomplete responses.
 Composite and Docker actions need a separate audit. This command refuses them.
 
-The [initial report](security/action-audit/initial.json) matched 34 of 236 runtime npm package versions.
-After upgrading four actions, the [assessed report](security/action-audit/assessed.json) matches 23 of 217.
+The initial audit matched 34 of 236 runtime npm package versions.
+After upgrading four actions, the follow-up audit matched 23 of 217.
+Run `make actions-audit` to produce a current report in `target/security/actions.json`.
 **The GitHub Actions dependency audit is not clean.**
 Even the four current upstream releases retain advisory matches.
 A source lockfile graph can include code absent from the built bundle. A bundle digest does not prove that code is safe.
@@ -154,7 +155,7 @@ The four upgraded actions use Node 24. Their remaining matches are recorded with
 - Setup Clojure: `brace-expansion 1.1.14`, `minimatch 3.1.5`, `undici 6.25.0`.
 - Checkout: `undici 6.27.0`.
 - Setup Java: `minimatch 10.2.6`, `undici 6.29.0`.
-- Upload artifact: brace-expansion, minimatch, glob, lodash, XML parser/builder, and Undici versions listed in the assessed report.
+- Upload artifact: brace-expansion, minimatch, glob, lodash, XML parser/builder, and Undici versions recorded by `make actions-audit`.
 
 Workflow inputs use fixed tool versions, fixed artifact paths, and a fixed Java matrix, not pull-request titles or caller-supplied patterns.
 That limits attacker control over glob and parser inputs, but is not proof that every transitive path is unreachable.
@@ -210,8 +211,12 @@ Remove old repository or organization secrets before storing replacements in the
 Review retained workflow logs and artifacts for disclosures. Limit access or remove exposed artifacts under the owner's incident process.
 Credential rotation and GitHub environment setup require owner action. Local code changes do not perform them.
 
-## Verification evidence
+## Local verification
 
-The [post-remediation report](security/verification.md) records the disposable macOS run, source revision, commands, inventories, file/process observations, and limitations.
-Its offline gates pass. The separate action advisory audit retains known matches and is not described as clean.
+Run `make offline-verification` to test committed source in a disposable macOS workspace.
+The runner stores local evidence under `.verification/`. Audit commands write reports under `target/security/`.
+These directories and the former evidence directory, `doc/security/`, stay outside version control.
+If a release requires evidence, archive it separately with its source revision.
+
+The remediation run passed its offline gates. The separate action advisory audit retained known matches and was not clean.
 Real providers, hosted CI, credential rotation, environment protection, and publication were not exercised.

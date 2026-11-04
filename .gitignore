@@ -44,7 +44,8 @@ profiles.clj
 .env
 .dir-locals.el
 
-# Disposable security verification workspaces
+# Local security audit evidence and disposable verification workspaces
+/doc/security/
 /.verification/
 
 # Coverage reports
