@@ -364,7 +364,7 @@
                           :request {}})
       true)
     (catch Exception e
-      (log/warn "Bedrock health check failed" {:error (.getMessage e)})
+      (log/warn "Bedrock health check failed" {:error (.getName (class e))})
       false)))
 
 (defn get-cost-per-token-impl
@@ -465,8 +465,8 @@
             (streaming/close-stream! output-ch)))
 
         (catch Exception e
-          (log/error "Error in Bedrock streaming request" {:error (.getMessage e)})
-          (async/>!! output-ch (streaming/stream-error "bedrock" (.getMessage e)))
+          (log/error "Error in Bedrock streaming request" {:error (.getName (class e))})
+          (async/>!! output-ch (streaming/stream-error "bedrock" "Streaming request failed"))
           (streaming/close-stream! output-ch))))
 
     output-ch))
@@ -488,7 +488,7 @@
           [])
         (map :modelId (:modelSummaries response))))
     (catch Exception e
-      (log/error "Error listing Bedrock models" e)
+      (log/error "Error listing Bedrock models" {:error-class (.getName (class e))})
       [])))
 
 (defn test-bedrock-connection
@@ -509,7 +509,7 @@
       (catch Exception e
         {:success false
          :provider "bedrock"
-         :error (.getMessage e)
+         :error (.getName (class e))
          :error-type (type e)}))))
 
 ;; ============================================================================

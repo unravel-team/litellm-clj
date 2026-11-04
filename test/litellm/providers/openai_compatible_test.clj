@@ -1,7 +1,10 @@
 (ns litellm.providers.openai-compatible-test
-  (:require [clojure.test :refer [are deftest is testing]]
+  (:require [litellm.offline]
+            [clojure.test :refer [are deftest is testing]]
             [litellm.providers.openai-compatible :as compat]
             [litellm.errors :as errors]))
+
+(clojure.test/use-fixtures :each litellm.offline/guard)
 
 (deftest kw->api-string-test
   (testing "keywords and strings become provider snake_case strings"
@@ -82,10 +85,7 @@
                                {:model "override" :stream true})
       (is false "expected invalid request")
       (catch clojure.lang.ExceptionInfo e
-        (is (errors/error-type? e :litellm/invalid-request))
-        (is (= #{:model :stream}
-               (set (get-in (ex-data e)
-                            [:context :validation-errors :protected-keys]))))))))
+        (is (errors/error-type? e :litellm/invalid-request))))))
 
 (deftest transform-response-test
   (testing "standard response extracts reasoning, tools, and cache usage"

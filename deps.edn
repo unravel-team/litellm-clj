@@ -1,13 +1,13 @@
 {:paths ["src" "resources" "test" "examples"]
 
- :deps {org.clojure/clojure {:mvn/version "1.11.1"}
+ :deps {org.clojure/clojure {:mvn/version "1.12.6"}
 
         ;; HTTP & JSON
         hato/hato {:mvn/version "0.9.0"}
-        cheshire/cheshire {:mvn/version "5.12.0"}
+        cheshire/cheshire {:mvn/version "6.2.1"}
 
         ;; Logging
-        ch.qos.logback/logback-classic {:mvn/version "1.4.11"}
+        ch.qos.logback/logback-classic {:mvn/version "1.5.38"}
         org.clojure/tools.logging {:mvn/version "1.2.4"}
 
         ;; Async
@@ -17,7 +17,9 @@
         metosin/malli {:mvn/version "0.13.0"}}
 
  :aliases
- {:dev {:extra-paths ["dev" "test"]
+ {:inventory {:main-opts ["scripts/dependency_inventory.clj"]}
+
+  :dev {:extra-paths ["dev" "test"]
         :extra-deps {org.clojure/tools.namespace {:mvn/version "1.4.4"}
                      criterium/criterium {:mvn/version "0.4.6"}
                      org.clojure/tools.trace {:mvn/version "0.7.11"}}}
@@ -28,34 +30,46 @@
                       mockery/mockery {:mvn/version "0.1.4"}}}
 
   :coverage {:extra-paths ["test"]
-             :extra-deps {cloverage/cloverage {:mvn/version "1.2.4"}}
-             :main-opts ["-m" "cloverage.coverage"
-                         "--codecov"
-                         "--output" "target/coverage"
-                         "--src-ns-path" "src"
-                         "--test-ns-path" "test"]}
+             :extra-deps {lambdaisland/kaocha-cloverage {:mvn/version "1.1.89"}}
+             :main-opts ["-m" "kaocha.runner" ":unit" "--plugin" "cloverage"]}
 
-  :kondo {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.03.13"}}
+  ;; clj-kondo still declares an older Cheshire/Jackson parser.
+  :kondo {:replace-deps {org.clojure/clojure {:mvn/version "1.12.6"}
+                         clj-kondo/clj-kondo {:mvn/version "2026.10.26"}
+                         cheshire/cheshire {:mvn/version "6.2.1"}}
           :main-opts ["-m" "clj-kondo.main"]}
 
   :repl {:extra-deps {nrepl/nrepl {:mvn/version "1.0.0"}
                       cider/cider-nrepl {:mvn/version "0.42.1"}}}
 
-  :build {:deps {io.github.clojure/tools.build {:mvn/version "0.9.6"}
-                 slipset/deps-deploy {:mvn/version "0.2.0"}}
+  ;; Explicit transitive pins below repair advisories in the deploy tool's S3/Maven chain.
+  :build {:deps {org.clojure/clojure {:mvn/version "1.12.6"}
+                 io.github.clojure/tools.build {:mvn/version "0.10.14"}
+                 slipset/deps-deploy {:mvn/version "0.2.5"
+                                      :exclusions [org.slf4j/slf4j-nop]}
+                 ch.qos.logback/logback-classic {:mvn/version "1.5.38"}
+                 com.amazonaws/aws-java-sdk-s3 {:mvn/version "1.12.797"}
+                 com.amazonaws/aws-java-sdk-sts {:mvn/version "1.12.797"}
+                 com.fasterxml.jackson.core/jackson-core {:mvn/version "2.21.8"}
+                 com.fasterxml.jackson.core/jackson-databind {:mvn/version "2.21.8"}
+                 com.fasterxml.jackson.dataformat/jackson-dataformat-cbor {:mvn/version "2.21.8"}
+                 org.jsoup/jsoup {:mvn/version "1.24.1"}}
           :ns-default build}
 
-  :uberjar {:replace-deps {org.clojure/clojure {:mvn/version "1.11.1"}}
+  :uberjar {:replace-deps {org.clojure/clojure {:mvn/version "1.12.6"}}
             :exec-fn hf.depstar/uberjar
             :exec-args {:aot true
                         :jar "target/litellm.jar"
                         :main-class litellm.main}}
 
-  :outdated {:replace-deps {com.github.liquidz/antq {:mvn/version "RELEASE"}}
+  ;; Current tools.deps removes antq's older Jetty/Plexus/Commons dependency chain.
+  :outdated {:replace-deps {org.clojure/clojure {:mvn/version "1.12.6"}
+                            com.github.liquidz/antq {:mvn/version "2.11.1276"}
+                            org.clojure/tools.deps {:mvn/version "0.31.1646"}}
              :main-opts ["-m" "antq.core"]}
 
   ;; Optional: AWS Bedrock provider
   :bedrock {:extra-paths ["contrib/bedrock/src" "contrib/bedrock/test"]
-            :extra-deps {com.cognitect.aws/api {:mvn/version "0.8.692"}
+            :extra-deps {com.cognitect.aws/api {:mvn/version "0.8.847"}
                          com.cognitect.aws/endpoints {:mvn/version "1.1.12.772"}
                          com.cognitect.aws/bedrock-runtime {:mvn/version "871.2.32.2"}}}}}

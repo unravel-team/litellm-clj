@@ -1,8 +1,11 @@
 (ns litellm.providers.deepseek-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [litellm.offline]
+            [clojure.test :refer [deftest is testing]]
             [litellm.errors :as errors]
             [litellm.providers.core :as providers]
             [litellm.providers.deepseek :as deepseek]))
+
+(clojure.test/use-fixtures :each litellm.offline/guard)
 
 (deftest url-building-test
   (testing "DeepSeek endpoint URLs tolerate trailing slash overrides"

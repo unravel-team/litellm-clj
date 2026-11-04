@@ -71,7 +71,7 @@
   (println (format "⚠️  Provider E2E tests skipped - account state prevents live call: %s"
                    (.getMessage e)))
   (when (instance? clojure.lang.ExceptionInfo e)
-    (println (format "    Error data: %s" (pr-str (ex-data e)))))
+    (println (format "    Error data: %s" (pr-str (select-keys (ex-data e) [:type :provider :http-status])))))
   (is true (str "Skipped provider E2E - " (.getMessage e))))
 
 (defmacro testing-with-skippable-provider-errors
@@ -154,12 +154,12 @@
                   final-content (get-in final-response [:choices 0 :message :content])]
               
               (is (some? final-content) "Should receive final response after tool execution")))
-          (println (format "  ⚠️  Function calling test skipped - model did not request tool call"))))
+          (println "  ⚠️  Function calling test skipped - model did not request tool call")))
       
       (catch Exception e
         (println (format "  ⚠️  Function calling test skipped - error: %s" (.getMessage e)))
         (when (instance? clojure.lang.ExceptionInfo e)
-          (println (format "    Error data: %s" (pr-str (ex-data e)))))))))
+          (println (format "    Error data: %s" (pr-str (select-keys (ex-data e) [:type :provider :http-status])))))))))
 
 (deftest ^:e2e test-openai-provider
   (testing-with-skippable-provider-errors "OpenAI provider E2E tests"
@@ -391,7 +391,7 @@
                 (catch Exception e
                   (println (format "  ⚠️  Function calling test skipped - error: %s" (.getMessage e)))
                   (when (instance? clojure.lang.ExceptionInfo e)
-                    (println (format "    Error data: %s" (pr-str (ex-data e))))))))
+                    (println (format "    Error data: %s" (pr-str (select-keys (ex-data e) [:type :provider :http-status]))))))))
 
             (println (format "✅ %s provider tests passed!\n" provider-name)))
           (do

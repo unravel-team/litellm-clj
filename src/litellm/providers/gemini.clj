@@ -260,7 +260,7 @@
                                       {:executor thread-pool})))]
       (= 200 (:status response)))
     (catch Exception e
-      (log/warn "Gemini health check failed" {:error (.getMessage e)})
+      (log/warn "Gemini health check failed" {:error (.getName (class e))})
       false)))
 
 (defn get-cost-per-token-impl
@@ -339,14 +339,14 @@
                             transformed (transform-streaming-chunk-impl :gemini parsed)]
                         (>! output-ch transformed))
                       (catch Exception e
-                        (log/debug "Failed to parse Gemini streaming chunk" {:line line :error (.getMessage e)}))))
+                        (log/debug "Failed to parse Gemini streaming chunk" {:line-length (count line) :error (.getName (class e))}))))
                   (recur)))
               (.close ^java.io.BufferedReader reader)
               (streaming/close-stream! output-ch))))
         
         (catch Exception e
-          (log/error "Error in streaming request" {:error (.getMessage e)})
-          (>! output-ch (streaming/stream-error "gemini" (.getMessage e)))
+          (log/error "Error in streaming request" {:error (.getName (class e))})
+          (>! output-ch (streaming/stream-error "gemini" "Streaming request failed"))
           (streaming/close-stream! output-ch))))
     
     output-ch))
@@ -436,7 +436,7 @@
              (map #(str/replace (:name %) #"^models/" "")))
         (throw (ex-info "Failed to list models" {:status (:status response)}))))
     (catch Exception e
-      (log/error "Error listing Gemini models" e)
+      (log/error "Error listing Gemini models" {:error-class (.getName (class e))})
       [])))
 
 (defn validate-api-key
@@ -451,7 +451,7 @@
                              :timeout 5000})]
       (= 200 (:status response)))
     (catch Exception e
-      (log/debug "API key validation failed" {:error (.getMessage e)})
+      (log/debug "API key validation failed" {:error (.getName (class e))})
       false)))
 
 ;; ============================================================================
@@ -477,5 +477,5 @@
       (catch Exception e
         {:success false
          :provider "gemini"
-         :error (.getMessage e)
+         :error (.getName (class e))
          :error-type (type e)}))))

@@ -1,6 +1,9 @@
 (ns litellm.providers.openai-test
-  (:require [clojure.test :refer [deftest testing is]]
+  (:require [litellm.offline]
+            [clojure.test :refer [deftest testing is]]
             [litellm.providers.openai :as openai]))
+
+(clojure.test/use-fixtures :each litellm.offline/guard)
 
 ;; ============================================================================
 ;; Message Transformation Tests
@@ -101,7 +104,7 @@
 (deftest test-handle-error-response-401
   (testing "Handle 401 authentication error"
     (let [response {:status 401 :body {:error {:message "Invalid API key"}}}]
-      (is (thrown-with-msg? Exception #"Invalid API key"
+      (is (thrown-with-msg? Exception #"Provider returned HTTP 401"
                             (openai/handle-error-response :openai response))))))
 
 (deftest test-handle-error-response-429
@@ -109,7 +112,7 @@
     (let [response {:status 429 
                    :body {:error {:message "Rate limit exceeded"}}
                    :headers {"retry-after" "60"}}]
-      (is (thrown-with-msg? Exception #"Rate limit exceeded"
+      (is (thrown-with-msg? Exception #"Provider returned HTTP 429"
                             (openai/handle-error-response :openai response))))))
 
 ;; ============================================================================

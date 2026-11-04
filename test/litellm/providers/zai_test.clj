@@ -1,8 +1,11 @@
 (ns litellm.providers.zai-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [litellm.offline]
+            [clojure.test :refer [deftest is testing]]
             [litellm.errors :as errors]
             [litellm.providers.core :as providers]
             [litellm.providers.zai :as zai]))
+
+(clojure.test/use-fixtures :each litellm.offline/guard)
 
 (defn- thrown-invalid-request?
   [f]

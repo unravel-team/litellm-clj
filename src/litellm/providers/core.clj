@@ -725,7 +725,7 @@
       (+ (* prompt-tokens (:input cost-per-token 0))
          (* completion-tokens (:output cost-per-token 0))))
     (catch Exception e
-      (log/warn "Error calculating cost" {:provider provider-name :model model :error (.getMessage e)})
+      (log/warn "Error calculating cost" {:provider provider-name :model model :error (.getName (class e))})
       0.0)))
 
 ;; ============================================================================
@@ -767,7 +767,7 @@
       (catch Exception e
         {:success false
          :provider provider-name
-         :error (.getMessage e)}))))
+         :error (.getName (class e))}))))
 
 ;; ============================================================================
 ;; Provider Comparison Utilities

@@ -6,6 +6,7 @@
   - Rich error data structures with context
   - Error predicates for pattern matching
   - Retry and recoverability analysis"
+  (:refer-clojure :exclude [ex-info])
   (:require [clojure.string :as str]
             [cheshire.core :as json]))
 
@@ -50,6 +51,29 @@
 ;; ============================================================================
 ;; Error Data Structure
 ;; ============================================================================
+
+(defn redact
+  "Remove credentials and raw payloads from diagnostic data, including nested collections."
+  [value]
+  (cond
+    (map? value)
+    (into {} (map (fn [[k v]]
+                    [k (if (or (re-find #"(?i)(api[-_]?key|authorization|headers|cookie|secret|password|token|credential|private[-_]?key)"
+                                        (str k))
+                               (contains? #{:request :config :response :body :validation-errors :stack-trace :cause} k))
+                         "[REDACTED]"
+                         (redact v))])) value)
+    (vector? value) (mapv redact value)
+    (set? value) (set (map redact value))
+    (sequential? value) (doall (map redact value))
+    (instance? Throwable value) (.getName (class value))
+    (string? value) (-> value
+                        (str/replace #"(?i)Bearer\s+[^\s\"',;}\]]+" "Bearer [REDACTED]")
+                        (str/replace #"(?i)((?:api[-_]?key|password|secret|token)\s*[:=]\s*)[^\s,;}\]]+" "$1[REDACTED]"))
+    :else value))
+
+(defn- ex-info [message data]
+  (clojure.core/ex-info (redact message) (redact data)))
 
 (defn- build-error-data
   "Build standardized error data map"
@@ -386,7 +410,7 @@
   "Create a human-readable error summary"
   [ex]
   (when (litellm-error? ex)
-    (let [data (ex-data ex)]
+    (let [data (redact (ex-data ex))]
       (str/join " | "
                 (filter some?
                         [(:message data)
@@ -399,7 +423,7 @@
   "Get detailed error information as a map"
   [ex]
   (when (litellm-error? ex)
-    (let [data (ex-data ex)]
+    (let [data (redact (ex-data ex))]
       {:error-type (:type data)
        :category (get-error-category ex)
        :message (:message data)
@@ -421,7 +445,7 @@
                               recoverable? chunk-number cause]
                        :or {error-type :litellm/streaming-error
                             recoverable? false}}]
-  {:type :error
+  (redact {:type :error
    :error-type error-type
    :provider provider
    :message message
@@ -429,7 +453,7 @@
    :provider-code provider-code
    :recoverable? recoverable?
    :chunk-number chunk-number
-   :cause (when cause (.getMessage ^Throwable cause))})
+   :cause (when cause (.getName (class cause)))}))
 
 (defn error-chunk?
   "Check if a streaming chunk is an error chunk"
@@ -452,7 +476,8 @@
   "Map HTTP status code to appropriate error constructor"
   [status provider message & {:keys [provider-code retry-after request-id body]
                               :as opts}]
-  (case status
+  (let [message (str "Provider returned HTTP " status)]
+    (case status
     400 (invalid-request message :context {:http-status status :body body})
     401 (authentication-error provider message :http-status status :provider-code provider-code)
     403 (authorization-error provider message :http-status status :provider-code provider-code)
@@ -467,7 +492,7 @@
                                     :provider-code provider-code :request-id request-id)
     ;; Default to provider error
     (provider-error provider message :http-status status :provider-code provider-code 
-                   :request-id request-id :recoverable? (>= status 500))))
+                   :request-id request-id :recoverable? (>= status 500)))))
 
 ;; ============================================================================
 ;; HTTP Error Wrapping
@@ -482,32 +507,32 @@
     (catch java.net.SocketTimeoutException e
       (throw (timeout-error
                provider-name
-               (or (.getMessage e) "Request timeout")
+               "Request timeout"
                :cause e)))
     (catch java.net.ConnectException e
       (throw (connection-error
                provider-name
-               (or (.getMessage e) "Connection refused")
+               "Connection refused"
                :cause e)))
     (catch java.net.UnknownHostException e
       (throw (connection-error
                provider-name
-               (str "Unknown host: " (.getMessage e))
+               "Unknown host"
                :cause e)))
     (catch java.io.IOException e
       (throw (connection-error
                provider-name
-               (or (.getMessage e) "I/O error")
+               "I/O error"
                :cause e)))
     (catch javax.net.ssl.SSLException e
       (throw (connection-error
                provider-name
-               (str "SSL error: " (.getMessage e))
+               "SSL error"
                :cause e)))
     (catch java.util.concurrent.ExecutionException e
       ;; Re-throw if already a litellm error
-      (if (litellm-error? e)
-        (throw e)
+      (if (litellm-error? (ex-cause e))
+        (throw (ex-cause e))
         ;; Hato throws ExceptionInfo with HTTP response in ex-data
         (let [data (-> e ex-cause ex-data)]
           (if-let [status (:status data)]
@@ -523,9 +548,7 @@
                          body-str)
                   request-id (get headers "x-request-id")
                   error-info (if (map? body) (get body :error {}) {})
-                  message (or (:message error-info) 
-                             (.getMessage e)
-                             (str "HTTP " status))
+                  message (str "HTTP " status)
                   provider-code (or (:code error-info) (:type error-info))]
               (throw (http-status->error 
                        status 
@@ -537,12 +560,11 @@
             ;; Not an HTTP error - wrap as provider error
             (throw (provider-error
                      provider-name
-                     (or (.getMessage e) "HTTP error")
+                     "HTTP request failed"
                      :cause e))))))
     (catch Exception e
-      (throw (provider-error
-              provider-name
-              (or (.getMessage e) "Unexpected error")
-              :cause e)))))
+      (if (litellm-error? e)
+        (throw e)
+        (throw (provider-error provider-name "HTTP request failed"))))))
 
 

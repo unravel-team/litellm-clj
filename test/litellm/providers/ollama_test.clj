@@ -1,6 +1,9 @@
 (ns litellm.providers.ollama-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [litellm.offline]
+            [clojure.test :refer [deftest is testing]]
             [litellm.providers.ollama :as ollama]))
+
+(clojure.test/use-fixtures :each litellm.offline/guard)
 
 ;; ============================================================================
 ;; Tool Transformation Tests

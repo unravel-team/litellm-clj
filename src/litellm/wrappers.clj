@@ -40,14 +40,14 @@
                      (catch Exception e
                        (log/warn "Config failed, trying fallback"
                                  {:config config-name
-                                  :error (.getMessage e)
+                                  :error (.getName (class e))
                                   :remaining (rest remaining)})
                        {:success false :error e}))]
         (if (:success result)
           (:result result)
           (recur (rest remaining)
                  (conj errors {:config config-name
-                              :error (.getMessage ^Throwable (:error result))})))))))
+                              :error (.getName (class (:error result)))})))))))
 
 ;; ============================================================================
 ;; Retry Support
@@ -98,7 +98,7 @@
                         {:attempt attempt
                          :max-attempts max-attempts
                          :delay-ms delay-ms
-                         :error (.getMessage ^Throwable (:error result))})
+                         :error (.getName (class (:error result)))})
               (Thread/sleep (long delay-ms))
               (recur (inc attempt)))
             
@@ -106,7 +106,7 @@
             (do
               (log/error "Request failed after retries"
                          {:attempts attempt
-                          :error (.getMessage ^Throwable (:error result))})
+                          :error (.getName (class (:error result)))})
               (throw (:error result)))))))))
 
 ;; ============================================================================
@@ -207,7 +207,7 @@
     (try
       (callback cost usage response)
       (catch Exception e
-        (log/error "Cost tracking callback failed" {:error (.getMessage e)})))
+        (log/error "Cost tracking callback failed" {:error (.getName (class e))})))
     
     ;; Return original response
     response))

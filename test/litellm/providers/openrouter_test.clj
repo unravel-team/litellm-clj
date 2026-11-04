@@ -1,6 +1,9 @@
 (ns litellm.providers.openrouter-test
-  (:require [clojure.test :refer [deftest testing is]]
+  (:require [litellm.offline]
+            [clojure.test :refer [deftest testing is]]
             [litellm.providers.openrouter :as openrouter]))
+
+(clojure.test/use-fixtures :each litellm.offline/guard)
 
 (def ^:private response-fixture
   {:body {:id "gen-1"

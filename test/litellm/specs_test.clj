@@ -1,6 +1,9 @@
 (ns litellm.specs-test
-  (:require [clojure.test :refer [deftest testing is]]
+  (:require [litellm.offline]
+            [clojure.test :refer [deftest testing is]]
             [litellm.specs :as specs]))
+
+(clojure.test/use-fixtures :each litellm.offline/guard)
 
 (def base-completion-request
   {:model "provider-model"

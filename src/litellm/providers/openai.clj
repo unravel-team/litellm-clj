@@ -239,7 +239,7 @@
                                      {:executor thread-pool})))]
       (= 200 (:status response)))
     (catch Exception e
-      (log/warn "OpenAI health check failed" {:error (.getMessage e)})
+      (log/warn "OpenAI health check failed" {:error (.getName (class e))})
       false)))
 
 (defn get-cost-per-token-impl
@@ -304,8 +304,8 @@
               (streaming/close-stream! output-ch))))
         
         (catch Exception e
-          (log/error "Error in streaming request" {:error (.getMessage e)})
-          (>! output-ch (streaming/stream-error "openai" (.getMessage e)))
+          (log/error "Error in streaming request" {:error (.getName (class e))})
+          (>! output-ch (streaming/stream-error "openai" "Streaming request failed"))
           (streaming/close-stream! output-ch))))
     
     output-ch))
@@ -390,7 +390,7 @@
         (map :id (get-in response [:body :data]))
         (throw (ex-info "Failed to list models" {:status (:status response)}))))
     (catch Exception e
-      (log/error "Error listing OpenAI models" e)
+      (log/error "Error listing OpenAI models" {:error-class (.getName (class e))})
       [])))
 
 (defn validate-api-key
@@ -402,7 +402,7 @@
                              :timeout 5000})]
       (= 200 (:status response)))
     (catch Exception e
-      (log/debug "API key validation failed" {:error (.getMessage e)})
+      (log/debug "API key validation failed" {:error (.getName (class e))})
       false)))
 
 ;; ============================================================================
@@ -428,5 +428,5 @@
       (catch Exception e
         {:success false
          :provider "openai"
-         :error (.getMessage e)
+         :error (.getName (class e))
          :error-type (type e)}))))

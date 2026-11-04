@@ -1,6 +1,8 @@
 (ns litellm.router-test
-  (:require [clojure.test :refer [deftest testing is use-fixtures]]
-            [litellm.router :as router]))
+  (:require [litellm.offline]
+            [clojure.test :refer [deftest testing is use-fixtures]]
+            [litellm.router :as router]
+            [litellm.core :as core]))
 
 ;; Test fixture to clear registry before each test
 (defn clear-registry-fixture [f]
@@ -8,7 +10,12 @@
   (f)
   (router/clear-router!))
 
-(use-fixtures :each clear-registry-fixture)
+(defn fake-env-fixture [f]
+  (with-redefs [litellm.router/env (fn [_]
+                                   (throw (ex-info "Router tests must supply a fake environment" {})))]
+    (f)))
+
+(use-fixtures :each litellm.offline/guard fake-env-fixture clear-registry-fixture)
 
 ;; ============================================================================
 ;; Configuration Management Tests
@@ -99,24 +106,16 @@
       (is (= "gpt-4o-mini" (:model config))))))
 
 (deftest test-setup-openai-from-env
-  (testing "Setup OpenAI from environment variable"
-    (if (System/getenv "OPENAI_API_KEY")
-      (do
-        (router/setup-openai!)
-        (let [config (router/get-config :openai)]
-          (is (some? config))
-          (is (= :openai (:provider config)))))
-      ;; If env var not set, just verify we have a test
-      (is true "Skipping test - no OPENAI_API_KEY env var"))))
+  (with-redefs [litellm.router/env {"OPENAI_API_KEY" "fake-environment-key"}]
+    (router/setup-openai!)
+    (let [config (router/get-config :openai)]
+      (is (= :openai (:provider config)))
+      (is (= "fake-environment-key" (get-in config [:config :api-key]))))))
 
 (deftest test-setup-openai-missing-key
-  (testing "Setup OpenAI fails without API key or env var"
-    (if (System/getenv "OPENAI_API_KEY")
-      ;; If env var is set, we can't test the failure case
-      (is true "Skipping test - OPENAI_API_KEY env var is set")
-      ;; If env var is not set, test that setup fails
-      (is (thrown-with-msg? Exception #"OpenAI API key"
-                            (router/setup-openai!))))))
+  (with-redefs [litellm.router/env {}]
+    (is (thrown-with-msg? Exception #"OpenAI API key"
+                          (router/setup-openai!)))))
 
 (deftest test-setup-anthropic
   (testing "Setup Anthropic with explicit API key"
@@ -218,16 +217,13 @@
       (is (= "test-key" (get-in config [:config :api-key]))))))
 
 (deftest test-quick-setup
-  (testing "Quick setup registers available providers"
+  (with-redefs [litellm.router/env {"OPENAI_API_KEY" "fake-openai"
+                                  "ANTHROPIC_API_KEY" "fake-anthropic"}]
     (router/quick-setup!)
-    (let [configs (router/list-configs)]
-      ;; Ollama should always be registered
-      (is (contains? (set configs) :ollama))
-      ;; Other providers only if env vars are set
-      (when (System/getenv "OPENAI_API_KEY")
-        (is (contains? (set configs) :openai)))
-      (when (System/getenv "ANTHROPIC_API_KEY")
-        (is (contains? (set configs) :anthropic))))))
+    (let [configs (set (router/list-configs))]
+      (is (= #{:ollama :openai :anthropic} configs))
+      (is (= "fake-openai" (get-in (router/get-config :openai) [:config :api-key])))
+      (is (= "fake-anthropic" (get-in (router/get-config :anthropic) [:config :api-key]))))))
 
 (deftest test-quick-setup-new-providers-from-env
   (testing "Quick setup registers DeepSeek, Kimi, and Z.AI when env vars exist"
@@ -353,39 +349,26 @@
                           (router/completion :nonexistent {:messages [{:role :user :content "test"}]})))))
 
 (deftest test-completion-with-registered-config
-  (testing "Completion uses registered config"
-    (router/register! :test-openai
-                      {:provider :openai
-                       :model "gpt-4"
-                       :config {:api-key "test-key"}})
-    ;; Will fail with authentication error, but that proves it's trying to use the config
-    (is (thrown? Exception
-                 (router/completion :test-openai {:messages [{:role :user :content "test"}]})))))
+  (router/register! :test-openai {:provider :openai :model "gpt-4"
+                                 :config {:api-key "fake"}})
+  (with-redefs [core/completion (fn [provider model request config]
+                                 {:provider provider :model model
+                                  :messages (:messages request) :config config})]
+    (is (= {:provider :openai :model "gpt-4"
+            :messages [{:role :user :content "test"}]
+            :config {:api-key "fake"}}
+           (router/completion :test-openai {:messages [{:role :user :content "test"}]})))))
 
-;; ============================================================================
-;; Chat Function Tests
-;; ============================================================================
-
-(deftest test-chat-without-system-prompt
-  (testing "Chat function without system prompt"
-    (router/register! :test-chat
-                      {:provider :openai
-                       :model "gpt-4"
-                       :config {:api-key "test-key"}})
-    ;; Will fail with authentication, but proves function works
-    (is (thrown? Exception
-                 (router/chat :test-chat "What is 2+2?")))))
-
-(deftest test-chat-with-system-prompt
-  (testing "Chat function with system prompt"
-    (router/register! :test-chat-sys
-                      {:provider :openai
-                       :model "gpt-4"
-                       :config {:api-key "test-key"}})
-    ;; Will fail with authentication, but proves function works
-    (is (thrown? Exception
-                 (router/chat :test-chat-sys "What is 2+2?" 
-                             :system-prompt "You are a math tutor")))))
+(deftest test-chat-messages
+  (router/register! :test-chat {:provider :openai :model "gpt-4"
+                               :config {:api-key "fake"}})
+  (with-redefs [core/completion (fn [_ _ request _] (:messages request))]
+    (is (= [{:role :user :content "What is 2+2?"}]
+           (router/chat :test-chat "What is 2+2?")))
+    (is (= [{:role :system :content "You are a math tutor"}
+            {:role :user :content "What is 2+2?"}]
+           (router/chat :test-chat "What is 2+2?"
+                        :system-prompt "You are a math tutor")))))
 
 ;; ============================================================================
 ;; Integration Tests (require API keys)

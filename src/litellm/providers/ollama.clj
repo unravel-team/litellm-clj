@@ -268,7 +268,7 @@
                                     {:executor thread-pool})))]
       (= 200 (:status response)))
     (catch Exception e
-      (log/warn "Ollama health check failed" {:error (.getMessage e)})
+      (log/warn "Ollama health check failed" {:error (.getName (class e))})
       false)))
 
 (defn get-cost-per-token-impl
@@ -317,7 +317,7 @@
                 transformed (parse-streaming-chunk chunk request-type)]
             (callback transformed))
           (catch Exception e
-            (log/debug "Failed to parse streaming chunk" {:line line :error (.getMessage e)})))))))
+            (log/debug "Failed to parse streaming chunk" {:line-length (count line) :error (.getName (class e))})))))))
 
 ;; ============================================================================
 ;; Utility Functions
@@ -333,7 +333,7 @@
         (map :name (get-in response [:body :models]))
         (throw (ex-info "Failed to list models" {:status (:status response)}))))
     (catch Exception e
-      (log/error "Error listing Ollama models" e)
+      (log/error "Error listing Ollama models" {:error-class (.getName (class e))})
       [])))
 
 ;; ============================================================================
@@ -359,5 +359,5 @@
       (catch Exception e
         {:success false
          :provider "ollama"
-         :error (.getMessage e)
+         :error (.getName (class e))
          :error-type (type e)}))))

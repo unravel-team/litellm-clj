@@ -240,7 +240,7 @@
                                       {:executor thread-pool})))]
       (= 200 (:status response)))
     (catch Exception e
-      (log/warn "Azure OpenAI health check failed" {:error (.getMessage e)})
+      (log/warn "Azure OpenAI health check failed" {:error (.getName (class e))})
       false)))
 
 (defn get-cost-per-token-impl
@@ -305,8 +305,8 @@
               (streaming/close-stream! output-ch))))
 
         (catch Exception e
-          (log/error "Error in streaming request" {:error (.getMessage e)})
-          (>! output-ch (streaming/stream-error "azure" (.getMessage e)))
+          (log/error "Error in streaming request" {:error (.getName (class e))})
+          (>! output-ch (streaming/stream-error "azure" "Streaming request failed"))
           (streaming/close-stream! output-ch))))
 
     output-ch))
@@ -413,6 +413,6 @@
       (catch Exception e
         {:success false
          :provider "azure"
-         :error (.getMessage e)
+         :error (.getName (class e))
          :error-type (type e)}))))
 

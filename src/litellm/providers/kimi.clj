@@ -162,7 +162,7 @@
           response (http/get (models-url config) request)]
       (= 200 (:status response)))
     (catch Exception e
-      (log/warn "Kimi health check failed" {:error (.getMessage e)})
+      (log/warn "Kimi health check failed" {:error (.getName (class e))})
       false)))
 
 (defn get-cost-per-token-impl
@@ -182,5 +182,5 @@
         (mapv :id (get-in response [:body :data]))
         []))
     (catch Exception e
-      (log/error "Error listing Kimi models" {:error (.getMessage e)})
+      (log/error "Error listing Kimi models" {:error (.getName (class e))})
       [])))

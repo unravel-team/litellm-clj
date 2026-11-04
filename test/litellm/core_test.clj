@@ -1,8 +1,11 @@
 (ns litellm.core-test
-  (:require [clojure.test :refer [deftest testing is]]
+  (:require [litellm.offline]
+            [clojure.test :refer [deftest testing is]]
             [litellm.core :as core]
             [litellm.schemas]
             [litellm.errors :as errors]))
+
+(clojure.test/use-fixtures :each litellm.offline/guard)
 
 ;; ============================================================================
 ;; Provider Discovery Tests
@@ -170,47 +173,17 @@
 ;; Provider-Specific Convenience Functions Tests
 ;; ============================================================================
 
-(deftest test-openai-completion
-  (testing "OpenAI completion function exists and delegates correctly"
-    ;; Without API key, should throw an error
-    (is (thrown? Exception
-                 (core/openai-completion "gpt-4" 
-                                        {:messages [{:role :user :content "test"}]})))))
-
-(deftest test-anthropic-completion
-  (testing "Anthropic completion function exists and delegates correctly"
-    ;; Without API key, should throw an error
-    (is (thrown? Exception
-                 (core/anthropic-completion "claude-3-sonnet-20240229"
-                                           {:messages [{:role :user :content "test"}]})))))
-
-(deftest test-gemini-completion
-  (testing "Gemini completion function exists and delegates correctly"
-    ;; Without API key, should throw an error
-    (is (thrown? Exception
-                 (core/gemini-completion "gemini-pro"
-                                        {:messages [{:role :user :content "test"}]})))))
-
-(deftest test-mistral-completion
-  (testing "Mistral completion function exists and delegates correctly"
-    ;; Without API key, should throw an error
-    (is (thrown? Exception
-                 (core/mistral-completion "mistral-medium"
-                                         {:messages [{:role :user :content "test"}]})))))
-
-(deftest test-ollama-completion
-  (testing "Ollama completion function exists"
-    ;; Ollama might fail with connection error if not running locally
-    (is (thrown? Exception
-                 (core/ollama-completion "llama3"
-                                        {:messages [{:role :user :content "test"}]})))))
-
-(deftest test-openrouter-completion
-  (testing "OpenRouter completion function exists and delegates correctly"
-    ;; Without API key, should throw an error
-    (is (thrown? Exception
-                 (core/openrouter-completion "openai/gpt-4"
-                                            {:messages [{:role :user :content "test"}]})))))
+(deftest test-provider-completion-helpers
+  (doseq [[helper provider model] [[core/openai-completion :openai "gpt-4"]
+                                  [core/anthropic-completion :anthropic "claude-3-sonnet"]
+                                  [core/gemini-completion :gemini "gemini-pro"]
+                                  [core/mistral-completion :mistral "mistral-medium"]
+                                  [core/ollama-completion :ollama "llama3"]
+                                  [core/openrouter-completion :openrouter "openai/gpt-4"]]]
+    (let [request {:messages [{:role :user :content "test"}]}]
+      (with-redefs [core/completion (fn [p m r c] [p m r c])]
+        (is (= [provider model request {:api-key "fake"}]
+               (helper model request :api-key "fake")))))))
 
 (deftest test-new-provider-completion-helpers
   (testing "New provider completion helpers delegate to core completion with provider keywords"
@@ -247,17 +220,13 @@
 ;; ============================================================================
 
 (deftest test-chat-function
-  (testing "Chat function creates proper request"
-    ;; Without system prompt - should throw error without API key
-    (is (thrown? Exception
-                 (core/chat :openai "gpt-4" "What is 2+2?"
-                           :api-key nil)))
-    
-    ;; With system prompt - should throw error without API key
-    (is (thrown? Exception
-                 (core/chat :openai "gpt-4" "What is 2+2?"
-                           :system-prompt "You are a math tutor"
-                           :api-key nil)))))
+  (with-redefs [core/completion (fn [_ _ request _] request)]
+    (is (= [{:role :user :content "What is 2+2?"}]
+           (:messages (core/chat :openai "gpt-4" "What is 2+2?"))))
+    (is (= [{:role :system :content "You are a math tutor"}
+            {:role :user :content "What is 2+2?"}]
+           (:messages (core/chat :openai "gpt-4" "What is 2+2?"
+                                 :system-prompt "You are a math tutor"))))))
 
 ;; ============================================================================
 ;; Embedding API Tests
@@ -280,26 +249,13 @@
                           (core/embedding :anthropic "claude-3-sonnet-20240229"
                                          {:input "test"})))))
 
-(deftest test-openai-embedding
-  (testing "OpenAI embedding function exists and delegates correctly"
-    ;; Without API key, should throw an error
-    (is (thrown? Exception
-                 (core/openai-embedding "text-embedding-3-small"
-                                       {:input "test"})))))
-
-(deftest test-mistral-embedding
-  (testing "Mistral embedding function exists and delegates correctly"
-    ;; Without API key, should throw an error
-    (is (thrown? Exception
-                 (core/mistral-embedding "mistral-embed"
-                                        {:input "test"})))))
-
-(deftest test-gemini-embedding
-  (testing "Gemini embedding function exists and delegates correctly"
-    ;; Without API key, should throw an error
-    (is (thrown? Exception
-                 (core/gemini-embedding "text-embedding-004"
-                                       {:input "test"})))))
+(deftest test-provider-embedding-helpers
+  (doseq [[helper provider model] [[core/openai-embedding :openai "text-embedding-3-small"]
+                                  [core/mistral-embedding :mistral "mistral-embed"]
+                                  [core/gemini-embedding :gemini "text-embedding-004"]]]
+    (with-redefs [core/embedding (fn [p m r c] [p m r c])]
+      (is (= [provider model {:input "test"} {:api-key "fake"}]
+             (helper model {:input "test"} :api-key "fake"))))))
 
 ;; ============================================================================
 ;; Integration Tests (require API keys)
