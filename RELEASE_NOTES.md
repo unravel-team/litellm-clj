@@ -1,3 +1,5 @@
+Current release changes are in [CHANGELOG.md](CHANGELOG.md). The upcoming `0.4.x` release contains breaking changes to endpoint configuration and diagnostics.
+
 # v0.3.0-alpha.2
 - Ollama function calling / tools support
 - Azure provider: hanging parenthesis fix
